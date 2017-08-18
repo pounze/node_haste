@@ -529,7 +529,7 @@ haste.fn = Library.prototype =
 
 		        // checking for middleware set for the routes
 
-		        if(hasteObj.middleware[i] != null)
+		        if(typeof(hasteObj.middleware) != 'undefined' && hasteObj.middleware[i] != null)
 				{
 
 					// if it not set to null
@@ -1584,77 +1584,72 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
 
 // method to copy file from temp folder use for file uploading
 
-async function fileCopy(path,pathDir)
+function fileCopy(path,pathDir,callback)
 {
-	return new Promise((solve,reject)=>{
-	    fs.readFile(path,function(error, data){
-	      fs.writeFile(pathDir,data,function(error){
-	        if(error)
-	        {
-	          throw error;
-	          solve(false);
-	        }
-	        solve(true);
-	      });
-	    });
-	    solve(true);
-	  });
+    fs.readFile(path,function(error, data)
+    {
+      fs.writeFile(pathDir,data,function(error)
+      {
+        if(error)
+        {
+          throw error;
+          callback(false);
+        }
+        callback(true);
+      });
+    });
+    callback(true);
 }
 
 // filereader to read  files in buffers
 
-async function fileReader(path)
+function fileReader(path,callback)
 {
-	return new Promise((solve,reject)=>{
-	    var data = '';
-	    readerStream = fs.createReadStream(path);
+    var data = '';
+    readerStream = fs.createReadStream(path);
 
-	    readerStream.on('data',function(chunk)
-	    {
-	      data += chunk;
-	    });
+    readerStream.on('data',function(chunk)
+    {
+      data += chunk;
+    });
 
-	    readerStream.on('end',function()
-	    {
-	      solve(data);
-	    });
+    readerStream.on('end',function()
+    {
+      callback(data);
+    });
 
-	    readerStream.on('error',function()
-	    {
-	      solve('Failed to get content');
-	    });
-	  });
+    readerStream.on('error',function()
+    {
+      callback('Failed to get content');
+    });
 }
 
 // formatting dates
 
-
-async function formatDate(date)
+function formatDate(date,callback)
 {
-	return new Promise((solve,reject)=>{
-	    month = '' + (date.getMonth() + 1),
-	    day = '' + date.getDate(),
-	    year = date.getFullYear(),
-	    hour = date.getHours(),
-	    min = date.getMinutes(),
-	    sec = date.getSeconds();
+    month = '' + (date.getMonth() + 1),
+    day = '' + date.getDate(),
+    year = date.getFullYear(),
+    hour = date.getHours(),
+    min = date.getMinutes(),
+    sec = date.getSeconds();
 
-	    if (month.length < 2) month = '0' + month;
-	    if (day.length < 2) day = '0' + day;
-	    if (hour.length < 2) hour = '0' + hour;
-	    if (min.length < 2) min = '0' + min;
-	    if (sec.length < 2) sec = '0' + sec;
+    if (month.length < 2) month = '0' + month;
+    if (day.length < 2) day = '0' + day;
+    if (hour.length < 2) hour = '0' + hour;
+    if (min.length < 2) min = '0' + min;
+    if (sec.length < 2) sec = '0' + sec;
 
-	    solve([year, month, day].join('-')+' '+hour+':'+min+':'+sec);
-	  });
+    callback([year, month, day].join('-')+' '+hour+':'+min+':'+sec);
 }
 
 // hash method to encypt data
 
-async function Hash(method,string,encoding)
+function Hash(method,string,encoding,callback)
 {
-	return new Promise((solve,reject)=>{
-    var crypto = require('crypto');
+	console.log(string);
+	var crypto = require('crypto');
     var hash = '';
     if(method == 'sha256')
     {
@@ -1705,86 +1700,84 @@ async function Hash(method,string,encoding)
     {
       hash = 'Please select a valid hashing method';
     } 
-    solve(hash);
-  });
+
+    callback(hash);
 }
 
 // method to make http client request to other server
 
-async function RemoteRequest(params)
+function RemoteRequest(params,callback)
 {
-	return new Promise((solve,reject)=>{
-	    var postData = '';
-	    var data = '';
-	    if(params.protocol == 'http')
-	    {
-	      const http = require('http');
-	      if(typeof(params.message) != 'undefined')
-	      {
-	        postData = params.message;
-	      }
+    var postData = '';
+    var data = '';
+    if(params.protocol == 'http')
+    {
+      const http = require('http');
+      if(typeof(params.message) != 'undefined')
+      {
+        postData = params.message;
+      }
 
 
-	      var req = http.request(params.options,function(res)
-	      {
-	        // on data event is fired call back is append into data variable
-	        res.on('data', function(chunk)
-	        {
-	           data += chunk;
-	        });
-	        // after ending the request
-	        res.on('end',function()
-	        {
-	          solve(data);
-	           // console.log('No more data in response.');
-	        });
-	      });
+      var req = http.request(params.options,function(res)
+      {
+        // on data event is fired call back is append into data variable
+        res.on('data', function(chunk)
+        {
+           data += chunk;
+        });
+        // after ending the request
+        res.on('end',function()
+        {
+          callback(data);
+           // console.log('No more data in response.');
+        });
+      });
 
-	      req.on('error',function(e)
-	      {
-	        console.log(`problem with request: ${e.message}`);
-	      });
+      req.on('error',function(e)
+      {
+        console.log(`problem with request: ${e.message}`);
+      });
 
-	      // write data to request body
-	      req.write(JSON.stringify(postData));
-	      req.end();
-	    }
+      // write data to request body
+      req.write(JSON.stringify(postData));
+      req.end();
+    }
 
-	    if(params.protocol == 'https')
-	    {
-	      const https = require('https');
-	      if(typeof(params.message) != 'undefined')
-	      {
-	        postData = params.message;
-	      }
+    if(params.protocol == 'https')
+    {
+      const https = require('https');
+      if(typeof(params.message) != 'undefined')
+      {
+        postData = params.message;
+      }
 
-	      var req = https.request(params.options,function(res)
-	      {
-	        // on data event is fired call back is append into data variable
-	        res.on('data', function(chunk)
-	        {
-	           data += chunk;
-	        });
-	        // after ending the request
-	        res.on('end',function()
-	        {
-	          solve(data);
-	           // console.log('No more data in response.');
-	        });
-	      });
+      var req = https.request(params.options,function(res)
+      {
+        // on data event is fired call back is append into data variable
+        res.on('data', function(chunk)
+        {
+           data += chunk;
+        });
+        // after ending the request
+        res.on('end',function()
+        {
+          callback(data);
+           // console.log('No more data in response.');
+        });
+      });
 
-	      req.on('error',function(e)
-	      {
-	        console.log(`problem with request: ${e.message}`);
-	      });
+      req.on('error',function(e)
+      {
+        console.log(`problem with request: ${e.message}`);
+      });
 
-	      // write data to request body
+      // write data to request body
 
-	      req.write(JSON.stringify(postData));
-	      req.end();
+      req.write(JSON.stringify(postData));
+      req.end();
 
-	    }
-	 });
+    }
 }
 
 exports.__init__ = haste;
