@@ -742,7 +742,7 @@ haste.fn = Library.prototype =
 	          break;
 	          default : res.setHeader("Content-Type", "text/plain");
 	        }
-	        
+
 	        res.writeHead(200,{
 	          'Cache-Control':'public,max-age=31536000',
 	          'Keep-Alive':' timeout=5, max=500',
@@ -754,6 +754,8 @@ haste.fn = Library.prototype =
 
 	        readerStream = fs.createReadStream('./'+requestUri);
 	        readerStream.pipe(res);
+
+	        break;
 	      }
 	      else
 	      {
@@ -776,6 +778,7 @@ haste.fn = Library.prototype =
 			readerStream.pipe(res);
 		    return false;
 	    }
+
   	  }
 	},
 	views:function(file,req,res,data)
