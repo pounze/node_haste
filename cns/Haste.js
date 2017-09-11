@@ -150,7 +150,7 @@ haste.fn = Library.prototype =
 	  else
 	  {
 	    console.log('Please enter Ip address and port');
-	    process.exit(0);
+	    return false;
 	  }
 	},
 	HttpsServer:function(ip,port,callback = null)
@@ -232,7 +232,7 @@ haste.fn = Library.prototype =
 	  else
 	  {
 	    console.log('Please enter Ip address and port');
-	    process.exit(0);
+	    return false;
 	  }
 	},
 	getIpAddress:function(req,res)
@@ -272,7 +272,7 @@ haste.fn = Library.prototype =
 	          'Pragma': 'public,max-age=31536000'
 	        });
 			res.end('Something went wrong');
-			process.exit(0);
+			return false;
 		}
 	},
 	handleRequest:async function(req,res)
@@ -314,7 +314,7 @@ haste.fn = Library.prototype =
 		req.on('error',function()
 		{
 			console.log('Error in server');
-			process.exit(0);
+			return false;
 		});
 
 		req.on("end", function()
@@ -569,7 +569,7 @@ haste.fn = Library.prototype =
 				          	// if middleware callback is false then request is stopped here
 
 				            console.log(middlewareCallbacks[1]);
-				            process.exit(0);
+				            return false;
 				          }
 				          else
 				          {
@@ -615,7 +615,7 @@ haste.fn = Library.prototype =
 				      if(!middlewareCallbacks[0])
 				      {
 				        console.log(middlewareCallbacks[1]);
-				        process.exit(0);
+				        return false;
 				      }
 				      else
 				      {
@@ -1352,7 +1352,7 @@ function Authorization(req)
 	catch(e)
 	{
 		console.log(e);
-		process.exit(0);
+		return false;
 	}
 }
 
