@@ -53,7 +53,7 @@ var Library = function(params)
     this.count = 0;
     this.input = {};
     this.staticPath = [];
-    this.middleware;
+    this.middleware = [];
     this.regexExp = [];
     return this;
 };
@@ -531,7 +531,6 @@ haste.fn = Library.prototype =
 
 		        if(typeof(hasteObj.middleware) != 'undefined' && hasteObj.middleware[i] != null)
 				{
-
 					// if it not set to null
 
 				  if(Array.isArray(hasteObj.middleware[i]))
@@ -568,7 +567,8 @@ haste.fn = Library.prototype =
 				          {
 				          	// if middleware callback is false then request is stopped here
 
-				            console.log(middlewareCallbacks[1]);
+				          	res.setHeader('Content-Type','application/json');
+				            res.end(JSON.stringify(middlewareCallbacks[1]));
 				            return false;
 				          }
 				          else
@@ -614,7 +614,8 @@ haste.fn = Library.prototype =
 				      var middlewareCallbacks = middlewareFile.main(req,res,hasteObj.input);
 				      if(!middlewareCallbacks[0])
 				      {
-				        console.log(middlewareCallbacks[1]);
+				      	res.setHeader('Content-Type','application/json');
+				        res.end(JSON.stringify(middlewareCallbacks[1]));
 				        return false;
 				      }
 				      else
@@ -926,7 +927,7 @@ haste.fn = Library.prototype =
 	{	
 		// adding middle wares
 
-		hasteObj.middleware = middleware;
+		hasteObj.middleware.push(middleware);
 		return this;
 	},
 	where:function(regex)
