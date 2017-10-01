@@ -529,8 +529,10 @@ haste.fn = Library.prototype =
 
 		        // checking for middleware set for the routes
 
+
 		        if(typeof(hasteObj.middleware) != 'undefined' && hasteObj.middleware[i] != null)
 				{
+
 					// if it not set to null
 
 				  if(Array.isArray(hasteObj.middleware[i]))
@@ -895,6 +897,8 @@ haste.fn = Library.prototype =
 	{
 		// get method for get routers
 
+		hasteObj.middleware[hasteObj.count] = null;
+		hasteObj.regexExp[hasteObj.count] = null;
 		hasteObj.request_type.push("GET");
 		hasteObj.count += 1;
 		hasteObj.uri.push(uri);
@@ -906,6 +910,8 @@ haste.fn = Library.prototype =
 
 		// post method for post routers
 
+		hasteObj.middleware[hasteObj.count] = null;
+		hasteObj.regexExp[hasteObj.count] = null;
 		hasteObj.request_type.push("POST");
 		hasteObj.count += 1;
 		hasteObj.uri.push(uri);
@@ -916,7 +922,8 @@ haste.fn = Library.prototype =
 	{
 
 		// for all kinds of http requests
-
+		hasteObj.middleware[hasteObj.count] = null;
+		hasteObj.regexExp[hasteObj.count] = null;
 		hasteObj.request_type.push("BOTH");
 		hasteObj.count += 1;
 		hasteObj.uri.push(uri);
@@ -927,7 +934,7 @@ haste.fn = Library.prototype =
 	{	
 		// adding middle wares
 
-		hasteObj.middleware.push(middleware);
+		hasteObj.middleware[hasteObj.count - 1] = middleware;
 		return this;
 	},
 	where:function(regex)
@@ -940,7 +947,7 @@ haste.fn = Library.prototype =
 			console.log('argument in where method must be object {}');
 			return false;
 		}
-		hasteObj.regexExp.push(regex);
+		hasteObj.regexExp[hasteObj.count - 1] = regex;
 		return this;
 	},
 	close:function()
