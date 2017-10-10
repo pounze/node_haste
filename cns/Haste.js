@@ -399,7 +399,6 @@ haste.fn = Library.prototype =
                   haste.fn.parseGet(req,function(data)
                   {
                     hasteObj.input['requestData'] = data;
-                    hasteObj.input['requestData'] = data;
                     haste.fn.modules(req,res,hasteObj);
                   });
                 break;
@@ -413,8 +412,6 @@ haste.fn = Library.prototype =
                 default:
                 console.error('Invalid Request');
               }
-
-              break;
             }
             else
             {
