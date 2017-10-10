@@ -382,7 +382,7 @@ haste.fn = Library.prototype =
           /*
             
           */
-            myExp = new RegExp(hasteObj.globalObject[obj]["regex"]);
+            myExp = new RegExp('^'+hasteObj.globalObject[obj]["regex"]+'$');
             if(requestUri.match(myExp))
             {
               let requestUriArr = requestUri.split('/');
@@ -415,7 +415,7 @@ haste.fn = Library.prototype =
             }
             else
             {
-                notMatchCount += 1;
+              notMatchCount += 1;
             }
         }
 
@@ -670,7 +670,7 @@ haste.fn = Library.prototype =
       else
       {
         console.error('Route\'s second argument must me function of string ' + typeof(hasteObj.argument[i]) + ' given');
-      }       
+      }      
     },
     get:function(uri,argument)
     {
