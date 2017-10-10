@@ -1,23 +1,23 @@
 /*
-	Haste Framework copy right 2017
+  Haste Framework copy right 2017
 
-	By Pounze It Solution Pvt Ltd
+  By Pounze It Solution Pvt Ltd
 
-	Developed @author Sudeep Dasgupta
+  Developed @author Sudeep Dasgupta
 
-	email: sudeep.dasgupta@pounze.com or sudeep.ignition@gmail.com
+  email: sudeep.dasgupta@pounze.com or sudeep.ignition@gmail.com
 
-	Join us to make this framework the best among all other frameworks
-	
-	current version: 1.0
+  Join us to make this framework the best among all other frameworks
+  
+  current version: 1.0
 
-	next version in 1.1 c++ Thread module will be implemented as node Addons library for concurrency
+  next version in 1.1 c++ Thread module will be implemented as node Addons library for concurrency
 */
 
 
 
 /*
-	Modules and libraries are initialized
+  Modules and libraries are initialized
 */
 
 const fs = require('fs');
@@ -29,8 +29,9 @@ const cluster = require('cluster');
 const qs = require('querystring');
 const config = require('./config.js');
 
+
 /*
-	haste method is declared where Library constructor is called
+  haste method is declared where Library constructor is called
 */
 
 
@@ -40,7 +41,7 @@ var haste = function(params)
 };
 
 /*
-	Library constructor variables are initialized
+  Library constructor variables are initialized
 */
 
 var Library = function(params)
@@ -389,7 +390,7 @@ haste.fn = Library.prototype =
               let matchedArrLen = matchedArr.length;
               for(let mat=1;mat<matchedArrLen;mat++)
               {
-                  hasteObj.input[matchedArr[mat]] = requestUriArr[mat];
+                hasteObj.input[matchedArr[mat]] = requestUriArr[mat];
               }
 
               switch(requestMethod)
@@ -397,162 +398,20 @@ haste.fn = Library.prototype =
                 case "GET":
                   haste.fn.parseGet(req,function(data)
                   {
-                      hasteObj.input['requestData'] = data;
+                    hasteObj.input['requestData'] = data;
+                    hasteObj.input['requestData'] = data;
+                    haste.fn.modules(req,res,hasteObj);
                   });
                 break;
                 case "POST":
                   haste.fn.parsePost(req,function(data)
                   {
-                      hasteObj.input['requestData'] = data;
+                    hasteObj.input['requestData'] = data;
+                    haste.fn.modules(req,res,hasteObj);
                   });
                 break;
                 default:
                 console.error('Invalid Request');
-              }
-
-
-              /*
-                checking for middleware if array or string 
-                if array then multiple middleware
-                else single middleware
-              */
-
-              if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'object' && Array.isArray(hasteObj.globalObject[obj]["middleware"]))
-              {
-                  let middlewareLen = hasteObj.globalObject[obj]["middleware"].length;
-                  for(var j=0;j<middlewareLen;j++)
-                  {
-
-                    // iterating thoough the middleware
-
-                    try
-                    {
-
-                      // checking if the middleware file exists or not
-
-                      var middlewarestat = fs.statSync('./middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
-
-                      // if the middleware is a file
-
-                      if(middlewarestat.isFile())
-                      {
-
-                          // then invoke the middleware main method
-
-                        var middlewareFile = require('../middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
-                        var middlewareCallbacks = middlewareFile.main(req,res,hasteObj.input);
-                        if(!middlewareCallbacks[0])
-                        {
-                          // if middleware callback is false then request is stopped here
-
-                          res.setHeader('Content-Type','application/json');
-                          res.end(JSON.stringify(middlewareCallbacks[1]));
-                          return false;
-                        }
-                        else
-                        {
-                          hasteObj.input[hasteObj.globalObject[obj]["middleware"][j]] = middlewareCallbacks[1];
-                        }
-                      }
-                      else
-                      {
-                        console.error('Middlware must be a javascript file');
-                      }
-                    }
-                    catch(e)
-                    {
-                      // if file is not found of the middleware then 500 internal server error is thrown
-
-                      res.writeHead(500,{
-                        'Cache-Control':'public,max-age=31536000',
-                        'Keep-Alive':' timeout=5, max=500',
-                        'Expires':new Date(),
-                        'Server': 'Node Server',
-                        'Developed-By':'Pounze It-Solution Pvt Limited',
-                        'Pragma': 'public,max-age=31536000'
-                      });
-
-                      var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
-                      readerStream.pipe(res);
-                      console.error(e);
-                    }
-                  }
-              }
-              else if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'string')
-              {
-                  let middlewarestat = fs.statSync('./middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
-                  if(middlewarestat.isFile())
-                  {
-                    let middlewareFile = require('../middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
-                    let middlewareCallbacks = middlewareFile.main(req,res,hasteObj.input);
-                    if(!middlewareCallbacks[0])
-                    {
-                      res.setHeader('Content-Type','application/json');
-                      res.end(JSON.stringify(middlewareCallbacks[1]));
-                      return false;
-                    }
-                    else
-                    {
-                      hasteObj.input[hasteObj.globalObject[obj]["middleware"]] = middlewareCallbacks[1];
-                    }
-                  }
-                  else
-                  {
-                    console.error('Middlware must be a javascript file');
-                  }
-              }
-              else
-              {
-                  console.error("Middleware must be string or array");
-              }
-
-              /*
-                checking if the second argument is string or function
-
-                if string then it is passed to controller
-                else callback is given to method
-              */
-
-
-              if(typeof(hasteObj.globalObject[obj]["argument"]) == 'function')
-              {
-                hasteObj.globalObject[obj]["argument"](req,res,hasteObj.input);
-              }
-              else if(typeof(hasteObj.globalObject[obj]["argument"]) == 'string')
-              {
-                  try
-                  {
-                     var stat = fs.statSync('./controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
-                      
-                      if(stat.isFile())
-                      {
-                        var controller = require('../controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
-                        controller.main(req,res,hasteObj.input);
-                      }
-                      else
-                      {
-                        console.error('Controller must me a javascript file'); 
-                      }
-                  }
-                  catch(e)
-                  {
-                      res.writeHead(500,{
-                        'Cache-Control':'public,max-age=31536000',
-                        'Keep-Alive':' timeout=5, max=500',
-                        'Expires':new Date(),
-                        'Server': 'Node Server',
-                        'Developed-By':'Pounze It-Solution Pvt Limited',
-                        'Pragma': 'public,max-age=31536000'
-                      });
-
-                      var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
-                      readerStream.pipe(res);
-                      console.error(e);
-                  }
-              }
-              else
-              {
-                console.error('Route\'s second argument must me function of string ' + typeof(hasteObj.argument[i]) + ' given');
               }
 
               break;
@@ -666,6 +525,155 @@ haste.fn = Library.prototype =
       }
 
       
+    },
+    modules:function(req,res,hasteObj)
+    {
+      /*
+        checking for middleware if array or string 
+        if array then multiple middleware
+        else single middleware
+      */
+      if(typeof(hasteObj.globalObject[obj]["middleware"]) != 'undefined')
+      {
+        if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'object' && Array.isArray(hasteObj.globalObject[obj]["middleware"]))
+        {
+            let middlewareLen = hasteObj.globalObject[obj]["middleware"].length;
+            for(var j=0;j<middlewareLen;j++)
+            {
+
+              // iterating thoough the middleware
+
+              try
+              {
+
+                // checking if the middleware file exists or not
+
+                var middlewarestat = fs.statSync('./middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
+
+                // if the middleware is a file
+
+                if(middlewarestat.isFile())
+                {
+
+                    // then invoke the middleware main method
+
+                  var middlewareFile = require('../middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
+                  var middlewareCallbacks = middlewareFile.main(req,res,hasteObj.input);
+                  if(!middlewareCallbacks[0])
+                  {
+                    // if middleware callback is false then request is stopped here
+
+                    res.setHeader('Content-Type','application/json');
+                    res.end(JSON.stringify(middlewareCallbacks[1]));
+                    return false;
+                  }
+                  else
+                  {
+                    hasteObj.input[hasteObj.globalObject[obj]["middleware"][j]] = middlewareCallbacks[1];
+                  }
+                }
+                else
+                {
+                  console.error('Middlware must be a javascript file');
+                }
+              }
+              catch(e)
+              {
+                // if file is not found of the middleware then 500 internal server error is thrown
+
+                res.writeHead(500,{
+                  'Cache-Control':'public,max-age=31536000',
+                  'Keep-Alive':' timeout=5, max=500',
+                  'Expires':new Date(),
+                  'Server': 'Node Server',
+                  'Developed-By':'Pounze It-Solution Pvt Limited',
+                  'Pragma': 'public,max-age=31536000'
+                });
+
+                var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
+                readerStream.pipe(res);
+                console.error(e);
+              }
+            }
+        }
+        else if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'string')
+        {
+            let middlewarestat = fs.statSync('./middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
+            if(middlewarestat.isFile())
+            {
+              let middlewareFile = require('../middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
+              let middlewareCallbacks = middlewareFile.main(req,res,hasteObj.input);
+              if(!middlewareCallbacks[0])
+              {
+                res.setHeader('Content-Type','application/json');
+                res.end(JSON.stringify(middlewareCallbacks[1]));
+                return false;
+              }
+              else
+              {
+                hasteObj.input[hasteObj.globalObject[obj]["middleware"]] = middlewareCallbacks[1];
+              }
+            }
+            else
+            {
+              console.error('Middlware must be a javascript file');
+            }
+        }
+        else
+        {
+            console.error("Middleware must be string or array");
+        }
+      }
+
+
+       /*
+        checking if the second argument is string or function
+
+        if string then it is passed to controller
+        else callback is given to method
+      */
+
+
+      if(typeof(hasteObj.globalObject[obj]["argument"]) == 'function')
+      {
+        hasteObj.globalObject[obj]["argument"](req,res,hasteObj.input);
+      }
+      else if(typeof(hasteObj.globalObject[obj]["argument"]) == 'string')
+      {
+          try
+          {
+             var stat = fs.statSync('./controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
+              
+              if(stat.isFile())
+              {
+                var controller = require('../controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
+                controller.main(req,res,hasteObj.input);
+              }
+              else
+              {
+                console.error('Controller must me a javascript file'); 
+              }
+          }
+          catch(e)
+          {
+              res.writeHead(500,{
+                'Cache-Control':'public,max-age=31536000',
+                'Keep-Alive':' timeout=5, max=500',
+                'Expires':new Date(),
+                'Server': 'Node Server',
+                'Developed-By':'Pounze It-Solution Pvt Limited',
+                'Pragma': 'public,max-age=31536000'
+              });
+
+              var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
+              readerStream.pipe(res);
+              console.error(e);
+          }
+      }
+      else
+      {
+        console.error('Route\'s second argument must me function of string ' + typeof(hasteObj.argument[i]) + ' given');
+      }       
     },
     get:function(uri,argument)
     {
@@ -813,30 +821,49 @@ haste.fn = Library.prototype =
     parsePost:function(req,callback)
     {
 
-        // parse post request 
+        if(typeof(req.headers['content-type']) != 'undefined')
+        {
+          // parse post request 
 
-        if((req.method == 'POST' &&  req.headers['content-type'].match(/(multipart\/form\-data\;)/g)))
-        {
-          callback({msg:'Please parse the multipart form data using multiparty or some other libraries'});
-        }
-        else
-        {
-          var body = '';
-          req.on('data',function(data)
+          if((req.method == 'POST' &&  req.headers['content-type'].match(/(multipart\/form\-data\;)/g)))
           {
-            body += data;
-          });
-          req.on('end',function()
+            try
+            {
+              const multiparty = require('multiparty');
+              var form = new multiparty.Form();
+              form.parse(req,function(err,fields,files)
+              {
+                var bindkey = {
+                  fields:fields,
+                  files:files
+                };
+                callback(bindkey);
+              });
+            }
+            catch(e)
+            {
+              console.error('Please install multiparty {npm install multiparty}');
+            }
+          }
+          else
           {
-            if(req.headers['content-type'] == 'application/json')
+            var body = '';
+            req.on('data',function(data)
             {
-              callback(JSON.parse(body));
-            }
-            else
+              body += data;
+            });
+            req.on('end',function()
             {
-              callback(qs.parse(body));
-            }
-          });
+              if(req.headers['content-type'] == 'application/json')
+              {
+                callback(JSON.parse(body));
+              }
+              else
+              {
+                callback(qs.parse(body));
+              }
+            });
+          }
         }
     },
     close:function()
