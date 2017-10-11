@@ -1247,7 +1247,6 @@ function formatDate(date,callback)
 
 function Hash(method,string,encoding,callback)
 {
-    console.error(string);
     var crypto = require('crypto');
     var hash = '';
     if(method == 'sha256')
@@ -1377,6 +1376,115 @@ function RemoteRequest(params,callback)
       req.end();
 
     }
+}
+
+/*
+    Regex matcher and parser
+*/
+
+function regexParser(matcher,regex,output)
+{
+  /*
+    start iterating in matcher object
+  */
+  for(var key in matcher)
+  {
+
+    /*
+      If the matcher[key] is an array
+    */
+    if(Array.isArray(matcher[key]))
+    {
+      /*
+        initialize an array of output object
+      */
+      output[key] = [];
+      for(var counter in matcher[key])
+      {
+        /*
+          iterating through matcher[key] for nester object
+          and creating new object into output[key][counter]
+        */
+
+        output[key][counter] = {};
+
+        for(var subKey in matcher[key][counter])
+        {
+          /*
+            Iterating through matcher[key][counter] to navigate through array
+          */
+
+          if(typeof(matcher[key][counter][subKey]) != regex[key][0][subKey]['datatype'])
+          {
+            /*
+              if key value does not match the data type then it checks for default value existence else through an error
+            */
+            if(typeof(regex[key][0][subKey]['default']) != 'undefined')
+            {
+              output[key][counter][subKey] = regex[key][0][subKey]['default'];
+            }
+            else
+            {
+              matcher = null;
+              regex = null;
+              delete matcher;
+              delete regex;
+              return {node:key,msg:'Failed to match',status:false};
+            }
+          }
+          else
+          {
+            /*
+              else copying data and array to output object
+            */
+            output[key][counter][subKey] = matcher[key][counter][subKey];
+          }
+        }
+      }
+    }
+    else
+    {
+
+      /*
+        If it not found an array then datatype is matched directly if matched the copying data to output object 
+
+        else throw an error
+      */
+      if(typeof(matcher[key]) != regex[key]['datatype'])
+      {
+        /*
+          it checks if any default value is stored
+        */
+        if(typeof(regex[key]['default']) != 'undefined')
+        {
+          output[key] = regex[key]['default'];
+        }
+        else
+        {
+          matcher = null;
+          regex = null;
+          delete matcher;
+          delete regex;
+          return {node:key,msg:'Failed to match',status:false};
+        }
+      }
+      else
+      {
+        output[key] = matcher[key];
+      }
+
+      if(matcher.hasOwnProperty(key) && typeof(matcher[key]) == 'object')
+      {
+        regexParser(matcher[key], regex[key],output[key]);
+      }
+    }
+  }
+
+  matcher = null;
+  regex = null;
+  delete matcher;
+  delete regex;
+  return {node:output,msg:'All nodes matched',status:true}
 }
 
 /*
@@ -1725,3 +1833,4 @@ exports.sendAuthorization = sendAuthorization;
 exports.getCookies = getCookies;
 exports.setCookies = setCookies;
 exports.getUserAgent = getUserAgent;
+exports.regexParser = regexParser;
