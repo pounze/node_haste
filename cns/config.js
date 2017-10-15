@@ -22,7 +22,8 @@ module.exports = {
 		setTimeout:12000,
 		showHeapUsuage:false,
 		maxListeners:0,
-		socketTimeout:0
+		socketTimeout:0,
+		cpuCores:''
 	},
 	log:{
 		path:'',
