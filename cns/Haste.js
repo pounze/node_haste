@@ -3509,6 +3509,7 @@ let session = {
             }
             // and setting value to it
 
+            sessionObj[sessionCookie[i][1]]['time'] = new Date();
             sessionObj[sessionCookie[i][1]][key] = value;
             break;
           }
@@ -3536,6 +3537,7 @@ let session = {
 
           // setting value to the object
           sessionObj[session.currentSession][key] = value;
+          sessionObj[session.currentSession]['time'] = new Date();
           hasteObj.response.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
         }
       }
@@ -3553,6 +3555,7 @@ let session = {
         // setting values to object and setting header with session cookie
 
         sessionObj[session.currentSession][key] = value;
+        sessionObj[session.currentSession]['time'] = new Date();
         hasteObj.response.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
       }
     }
@@ -3590,6 +3593,7 @@ let session = {
           {
             if(typeof(sessionObj[sessionCookie[i][1]]) != 'undefined')
             {
+              sessionObj[sessionCookie[i][1]]['time'] = new Date();
               return sessionObj[sessionCookie[i][1]][key];
             }
             else
@@ -3618,6 +3622,7 @@ let session = {
 
         if(sessionObj[session.currentSession] != undefined)
         {
+          sessionObj[session.currentSession]['time'] = new Date();
           return sessionObj[session.currentSession][key];
         }
         else
@@ -3655,6 +3660,7 @@ let session = {
             {
               sessionObj[sessionCookie[i][1]][key] = null;
               delete sessionObj[sessionCookie[i][1]][key];
+              sessionObj[sessionCookie[i][1]]['time'] = new Date();
               return true;
             }
             else
@@ -3766,8 +3772,36 @@ let session = {
         return false;
       }
     }
+  },
+  clearSession:function()
+  {
+    setInterval(function()
+    {
+      var date = new Date();
+      for(var key in sessionObj)
+      {
+        if(config.server.sessionTimeout == undefined)
+        {
+          if(Math.round((date - sessionObj[key]['time'])/1000) > 30)
+          {
+            sessionObj[key] = null;
+            delete sessionObj[key];
+          }
+        }
+        else
+        {
+          if(Math.round((date - sessionObj[key]['time'])/1000) > parseInt(config.server.sessionTimeout))
+          {
+            sessionObj[key] = null;
+            delete sessionObj[key];
+          }
+        }
+      }
+    },240000);
   }
 };
+
+session.clearSession();
 
 
 // methods and objects exported
