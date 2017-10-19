@@ -23,7 +23,8 @@ module.exports = {
 		showHeapUsuage:false,
 		maxListeners:0,
 		socketTimeout:0,
-		cpuCores:''
+		cpuCores:'',
+		sessionTimeout:5
 	},
 	log:{
 		path:'',
