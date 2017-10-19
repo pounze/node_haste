@@ -42,6 +42,8 @@ const qs = require('querystring');
 
 const config = require(__dirname+'/config.js');
 
+const sessionObj = require('./session.js');
+
 
 
 
@@ -90,7 +92,7 @@ var Library = function(params)
 
   this.response = {};
 
-  this.sessions;
+  this.cookieStatus = false;
 
   return this;
 
@@ -209,7 +211,7 @@ haste.fn = Library.prototype =
          */
 
           var server = http.createServer(haste.fn.handleRequest);
-          hasteObj.sessions = '{"time":"09:00:00"}';
+
           /*
 
             Http server configurations
@@ -390,7 +392,6 @@ haste.fn = Library.prototype =
           */
 
           var server = https.createServer(options,haste.fn.handleRequest);
-          hasteObj.sessions = '{"time":"09:00:00"}';
 
 
           /*
@@ -584,7 +585,7 @@ haste.fn = Library.prototype =
 
 
 
-        haste.fn.getIpAddress(req,res);
+        haste.fn.getIpAddress(hasteObj.request,hasteObj.response);
 
 
 
@@ -616,7 +617,7 @@ haste.fn = Library.prototype =
 
             };
 
-            res.end(JSON.stringify(data));
+            hasteObj.response.end(JSON.stringify(data));
 
             process.exit();
 
@@ -630,7 +631,7 @@ haste.fn = Library.prototype =
 
         */
 
-        req.on('error',function()
+        hasteObj.request.on('error',function()
 
         {
 
@@ -642,7 +643,7 @@ haste.fn = Library.prototype =
 
 
 
-        req.on("end", function()
+        hasteObj.request.on("end", function()
 
         {
 
@@ -670,7 +671,7 @@ haste.fn = Library.prototype =
 
         {
 
-            res.writeHead(303,{
+            hasteObj.response.writeHead(303,{
 
               'Cache-Control':'public,max-age=31536000',
 
@@ -690,7 +691,7 @@ haste.fn = Library.prototype =
 
             var readerStream = fs.createReadStream('./error_files/'+config.errorPages.MaintainancePage);
 
-            readerStream.pipe(res);
+            readerStream.pipe(hasteObj.response);
 
             
 
@@ -730,7 +731,7 @@ haste.fn = Library.prototype =
 
 
 
-      let requestMethod = req.method;
+      let requestMethod = hasteObj.request.method;
 
       let requestUri = url_module.parse(req.url).pathname;
 
@@ -751,20 +752,12 @@ haste.fn = Library.prototype =
 
 
       if(ext == undefined)
-
       {
-
-
-
         /*
 
           if extention is undefined then its url api request else static file request
 
         */
-
-
-
-
 
         /*
 
@@ -787,9 +780,7 @@ haste.fn = Library.prototype =
             myExp = new RegExp('^'+hasteObj.globalObject[obj]["regex"]+'$');
 
             if(requestUri.match(myExp) && requestMethod == hasteObj.globalObject[obj]['request_type'])
-
             {
-
               let requestUriArr = requestUri.split('/');
 
               let matchedArr = hasteObj.globalObject[obj]["uri"].split('/');
@@ -812,13 +803,13 @@ haste.fn = Library.prototype =
 
                 case "GET":
 
-                  haste.fn.parseGet(req,function(data)
+                  haste.fn.parseGet(hasteObj.request,function(data)
 
                   {
 
                     hasteObj.input['requestData'] = data;
 
-                    haste.fn.modules(req,res,hasteObj);
+                    haste.fn.modules(hasteObj.request,hasteObj.response,hasteObj);
 
                   });
 
@@ -826,13 +817,13 @@ haste.fn = Library.prototype =
 
                 case "POST":
 
-                  haste.fn.parsePost(req,function(data)
+                  haste.fn.parsePost(hasteObj.request,function(data)
 
                   {
 
                     hasteObj.input['requestData'] = data;
 
-                    haste.fn.modules(req,res,hasteObj);
+                    haste.fn.modules(hasteObj.request,hasteObj.response,hasteObj);
 
                   });
 
@@ -872,7 +863,7 @@ haste.fn = Library.prototype =
 
         {
 
-            res.writeHead(404,{
+            hasteObj.response.writeHead(404,{
 
               'Cache-Control':'public,max-age=31536000',
 
@@ -890,7 +881,7 @@ haste.fn = Library.prototype =
 
            var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
 
-           readerStream.pipe(res);
+           readerStream.pipe(hasteObj.response);
 
            return false;
 
@@ -932,61 +923,61 @@ haste.fn = Library.prototype =
 
             {
 
-              case '.css': res.setHeader("Content-Type", "text/css");
+              case '.css': hasteObj.response.setHeader("Content-Type", "text/css");
 
               break;
 
-              case '.ico' : res.setHeader("Content-Type","image/ico");
+              case '.ico' : hasteObj.response.setHeader("Content-Type","image/ico");
 
               break;
 
-              case '.js' : res.setHeader("Content-Type", "text/javascript");
+              case '.js' : hasteObj.response.setHeader("Content-Type", "text/javascript");
 
               break;
 
-              case '.jpeg' : res.setHeader("Content-Type", "image/jpg");
+              case '.jpeg' : hasteObj.response.setHeader("Content-Type", "image/jpg");
 
               break;
 
-              case '.jpg' : res.setHeader("Content-Type", "image/jpg");
+              case '.jpg' : hasteObj.response.setHeader("Content-Type", "image/jpg");
 
               break;
 
-              case '.png' : res.setHeader("Content-Type", "image/png");
+              case '.png' : hasteObj.response.setHeader("Content-Type", "image/png");
 
               break;
 
-              case '.gif' : res.setHeader("Content-Type", "image/gif");
+              case '.gif' : hasteObj.response.setHeader("Content-Type", "image/gif");
 
               break;
 
-              case '.json' : res.setHeader("Content-Type", "application/json");
+              case '.json' : hasteObj.response.setHeader("Content-Type", "application/json");
 
               break;
 
-              case '.pdf' : res.setHeader("Content-Type", "application/pdf");
+              case '.pdf' : hasteObj.response.setHeader("Content-Type", "application/pdf");
 
               break;
 
-              case '.ttf' : res.setHeader("Content-Type", "application/octet-stream");
+              case '.ttf' : hasteObj.response.setHeader("Content-Type", "application/octet-stream");
 
               break;
 
-              case '.html' : res.setHeader("Content-Type", "text/html");
+              case '.html' : hasteObj.response.setHeader("Content-Type", "text/html");
 
               break;
 
-              case '.woff' : res.setHeader("Content-Type", "application/x-font-woff");
+              case '.woff' : hasteObj.response.setHeader("Content-Type", "application/x-font-woff");
 
               break;
 
-              default : res.setHeader("Content-Type", "text/plain");
+              default : hasteObj.response.setHeader("Content-Type", "text/plain");
 
             }
 
 
 
-            res.writeHead(200,{
+            hasteObj.response.writeHead(200,{
 
               'Cache-Control':'public,max-age=31536000',
 
@@ -1006,7 +997,7 @@ haste.fn = Library.prototype =
 
             readerStream = fs.createReadStream('./'+requestUri);
 
-            readerStream.pipe(res);
+            readerStream.pipe(hasteObj.response);
 
 
 
@@ -1034,7 +1025,7 @@ haste.fn = Library.prototype =
 
         {
 
-          res.writeHead(403,{
+          hasteObj.response.writeHead(403,{
 
             'Cache-Control':'public,max-age=31536000',
 
@@ -1054,7 +1045,7 @@ haste.fn = Library.prototype =
 
             var readerStream = fs.createReadStream('./error_files/'+config.errorPages.DirectoryAccess);
 
-            readerStream.pipe(res);
+            readerStream.pipe(hasteObj.response);
 
             return false;
 
@@ -1081,6 +1072,9 @@ haste.fn = Library.prototype =
         else single middleware
 
       */
+
+     var success = 0;
+
 
       if(typeof(hasteObj.globalObject[obj]["middleware"]) != 'undefined')
 
@@ -1156,7 +1150,7 @@ haste.fn = Library.prototype =
 
                     hasteObj.input[hasteObj.globalObject[obj]["middleware"][j]] = middlewareCallbacks[1];
 
-                    haste.fn.executeMethod(req,res,hasteObj);
+                    success += 1;
 
                   }
 
@@ -1209,6 +1203,10 @@ haste.fn = Library.prototype =
 
             }
 
+            if(success == middlewareLen)
+            {
+              haste.fn.executeMethod(req,res,hasteObj);
+            }
         }
 
         else if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'string')
@@ -2238,7 +2236,6 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
                 if(!hasteObj.cookieStatus)
 
                 {
-
                     res.writeHead(200,{
 
                       'Content-Length':data.length,
@@ -2262,9 +2259,7 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
                 }
 
                 else
-
                 {
-
                     res.writeHead(200,{
 
                       'Content-Length':data.length,
@@ -2294,7 +2289,6 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
             else
 
             {
-
                 res.writeHead(code,headers);
 
             }
@@ -3455,7 +3449,7 @@ let mySQL = {
 /*
   create unique session id
 */
-function makeid(remoteAddress)
+function makeid()
 {
   var text = "";
   var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"+(new Date).getTime();
@@ -3467,402 +3461,314 @@ function makeid(remoteAddress)
 }
 
 /*
-  session object
+  session object, this session object sets value in memory not in file so reseting server will delete all sessions
 */
 
 let session = {
-  cookieKey:'',
-  get:function(key)
+  currentSession:'',
+  // setting session values
+  set:function(key,value)
   {
-    /*
-      session get method
-    */
+    var sessionValue = hasteObj.request.headers.cookie;
 
-    // parsing the current session json string
+    // if cookie is found
 
-    var sessionOBJ = JSON.parse(hasteObj.sessions);
-
-    // if the session is undefined the undefined is returned
-
-    if(hasteObj.request.headers.cookie != undefined)
+    if(sessionValue != '')
     {
-      if(typeof(hasteObj.sessions) == 'undefined')
+      // if cookie is not undefined
+
+      if(typeof(hasteObj.request.headers.cookie) != 'undefined')
       {
-        return undefined;
-      }
+        // getting the number of session cookie
 
-      /*
-        get session cookie header and iterate
-      */
+        var sessionCookie = hasteObj.request.headers.cookie;
+        sessionCookie = sessionCookie.split(';');
+        var sessionCookieLen = sessionCookie.length;
+        var nullCount = 0;
 
-      var sessionCookie = hasteObj.request.headers.cookie;
-      sessionCookie = sessionCookie.split(';');
-      var sessionCookieLen = sessionCookie.length;
-      var sessionKey = '';
-      let nullCount = 0;
+        // iterating through the session
 
-      /*
-        iterate and get session key value
-      */
-
-      for(var i=0;i<sessionCookieLen;i++)
-      {
-        sessionCookie[i] = sessionCookie[i].split('=');
-        sessionKey = sessionCookie[i][0].trim();
-
-        /*
-          if session key is matched  
-        */
-
-        if(sessionKey === 'HASTESSID')
+        for(var i=0;i<sessionCookieLen;i++)
         {
+          // spliting the session into array
 
-          /*
-            get session value
-          */
+          sessionCookie[i] = sessionCookie[i].split('=');
+          sessionKey = sessionCookie[i][0].trim();
 
-          if(sessionOBJ[sessionCookie[i][1]] == undefined)
+          // if the hastssid cookie is found
+
+          if(sessionKey === 'HASTESSID')
           {
-            /*
-              if session key is not undefined the its value is returned else undefined
-            */
-            if(sessionOBJ[session.cookieKey] != undefined)
+            // if the session value is undefined
+
+            if(typeof(sessionObj[sessionCookie[i][1]]) == 'undefined')
             {
-              return sessionOBJ[session.cookieKey][key];
+              // then creating object
+
+              sessionObj[sessionCookie[i][1]] = {};
             }
-            return undefined;
+            // and setting value to it
+
+            sessionObj[sessionCookie[i][1]][key] = value;
+            break;
           }
           else
           {
-            return sessionOBJ[sessionCookie[i][1]][key];
+            // else incrementing the nullCount
+            nullCount += 1;
           }
         }
-        else
+
+        // if nullCount == sessionCookieLen
+
+        if(nullCount == sessionCookieLen)
         {
-          nullCount += 1;
+          // creating session new id
+
+          session.currentSession = makeid();
+
+          // if object is undefined then creating new object
+
+          if(sessionObj[session.currentSession] == undefined)
+          {
+            sessionObj[session.currentSession] = {};
+          }
+
+          // setting value to the object
+          sessionObj[session.currentSession][key] = value;
+          hasteObj.response.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
         }
       }
-
-      /*
-        if key is not matched then it checkes for current session key if matched then returned
-      */
-
-      if(nullCount == sessionCookieLen)
+      else
       {
-        if(sessionOBJ[session.cookieKey][key] != undefined)
-        {
-          return sessionOBJ[session.cookieKey][key];
+
+        // session cookie is undefined
+        // creating new id and checking if object exists
+        session.currentSession = makeid();
+        if(sessionObj[session.currentSession] == undefined)
+        { 
+          sessionObj[session.currentSession] = {};
         }
-        return undefined;
+
+        // setting values to object and setting header with session cookie
+
+        sessionObj[session.currentSession][key] = value;
+        hasteObj.response.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
       }
-    }
-    else
-    {
-      /*
-        if there is not cookie is the request then it checks for current cookie else undefined
-      */
-      if(sessionOBJ[session.cookieKey] != undefined)
-      {
-        return sessionOBJ[session.cookieKey][key];
-      }
-      return undefined;
     }
   },
-  set:function(key,value)
+
+  // getting the session values
+  get:function(key)
   {
+    // getting the cookie headers
+    var sessionValue = hasteObj.request.headers.cookie;
 
-    /*
-      session value is parsed
-    */
-    var sessionOBJ = JSON.parse(hasteObj.sessions);
+    // if the cookie header is not empty
 
-    /*
-      if cookie is not undefined
-    */
-
-    if(hasteObj.request.headers.cookie != undefined)
+    if(sessionValue != '')
     {
-      // get the session cookie
-      var sessionCookie = hasteObj.request.headers.cookie;
-      sessionCookie = sessionCookie.split(';');
-      var sessionCookieLen = sessionCookie.length;
-      var sessionKey = '';
-      let nullCount = 0;
+      // if cookie is not undefined
 
-      // iterate through it
-
-      for(var i=0;i<sessionCookieLen;i++)
+      if(typeof(hasteObj.request.headers.cookie) != 'undefined')
       {
-        // make the session string into array and get the key and value
+        // getting the length of the cookie
 
-        sessionCookie[i] = sessionCookie[i].split('=');
-        sessionKey = sessionCookie[i][0].trim();
-        if(sessionKey === 'HASTESSID')
+        var sessionCookie = hasteObj.request.headers.cookie;
+        sessionCookie = sessionCookie.split(';');
+        var sessionCookieLen = sessionCookie.length;
+        var nullCount = 0;
+
+        // iterating through it
+
+        for(var i=0;i<sessionCookieLen;i++)
         {
-          // if the session cookie is found then
+          sessionCookie[i] = sessionCookie[i].split('=');
+          sessionKey = sessionCookie[i][0].trim();
 
-          if(sessionOBJ[sessionCookie[i][1]] == undefined)
+          if(sessionKey === 'HASTESSID')
           {
-            sessionOBJ[sessionCookie[i][1]] = {};
+            if(typeof(sessionObj[sessionCookie[i][1]]) != 'undefined')
+            {
+              return sessionObj[sessionCookie[i][1]][key];
+            }
+            else
+            {
+              return null;
+            }
+
+            break;
           }
+          else
+          {
+            nullCount += 1;
+          }
+        }
 
-          // setting the session key and value
-          
-          sessionOBJ[sessionCookie[i][1]][key] = value;
+        // if none cookie is matched then null is returned
 
-          // setting the current session value
+        if(nullCount == sessionCookieLen)
+        {
+          return null;
+        }
+      }
+      else
+      {
+        // if cookie is undefined and current session is not undefined then it is returned else null
 
-          session.cookieKey = sessionCookie[i][1];
-
-          hasteObj.sessions = JSON.stringify(sessionOBJ);
-          break;
+        if(sessionObj[session.currentSession] != undefined)
+        {
+          return sessionObj[session.currentSession][key];
         }
         else
         {
-          nullCount += 1;
+          return null;
         }
-      }
-
-      // if the session value is not matched with the cookies
-
-      if(nullCount == sessionCookieLen)
-      {
-        // then session object is created and session id is generated
-        // and passed into process session variable and header is set
-
-        let cookieKey = makeid(hasteObj.request.connection.remoteAddress);
-        session.cookieKey = cookieKey;
-        sessionOBJ[cookieKey] = {}; 
-        sessionOBJ[cookieKey][key] = value;
-        hasteObj.sessions = JSON.stringify(sessionOBJ);
-        hasteObj.response.setHeader('Set-Cookie','HASTESSID='+cookieKey);
       }
     }
     else
     {
-      // same as above
-
-      let cookieKey = makeid(hasteObj.request.connection.remoteAddress);
-      session.cookieKey = cookieKey;
-      sessionOBJ[cookieKey] = {}; 
-      sessionOBJ[cookieKey][key] = value;
-      hasteObj.sessions = JSON.stringify(sessionOBJ);
-      hasteObj.response.setHeader('Set-Cookie','HASTESSID='+cookieKey);
+      return null;
     }
   },
   del:function(key)
   {
-
-    // deleting key value from the session object
-
-    // session object is parsed
-
-    var sessionOBJ = JSON.parse(hasteObj.sessions);
-
-    // if the cookie is undefined
-
-    if(hasteObj.request.headers.cookie != undefined)
+    var sessionValue = hasteObj.request.headers.cookie;
+    if(sessionValue != '')
     {
-      if(typeof(hasteObj.sessions) == 'undefined')
+      // if cookie is found
+      if(typeof(hasteObj.request.headers.cookie) != 'undefined')
       {
-        return false;
-      }
+        var sessionCookie = hasteObj.request.headers.cookie;
+        sessionCookie = sessionCookie.split(';');
+        var sessionCookieLen = sessionCookie.length;
+        var nullCount = 0;
 
-      // getting the session headers
-
-      var sessionCookie = hasteObj.request.headers.cookie;
-      sessionCookie = sessionCookie.split(';');
-      var sessionCookieLen = sessionCookie.length;
-      var sessionKey = '';
-      let nullCount = 0;
-
-      // iterating through it
-
-      for(var i=0;i<sessionCookieLen;i++)
-      {
-        sessionCookie[i] = sessionCookie[i].split('=');
-        sessionKey = sessionCookie[i][0].trim();
-        if(sessionKey === 'HASTESSID')
+        for(var i=0;i<sessionCookieLen;i++)
         {
-          // if the session cookie is matched
+          sessionCookie[i] = sessionCookie[i].split('=');
+          sessionKey = sessionCookie[i][0].trim();
 
-          if(sessionOBJ[sessionCookie[i][1]][key] == undefined)
-          {           
-            // if the cookie is undefined and current session is undefined then return undefned
-
-            if(sessionOBJ[session.cookieKey][key] == undefined)
+          if(sessionKey === 'HASTESSID')
+          {
+            if(typeof(sessionObj[sessionCookie[i][1]]) != 'undefined')
             {
-              return false;
+              sessionObj[sessionCookie[i][1]][key] = null;
+              delete sessionObj[sessionCookie[i][1]][key];
+              return true;
             }
             else
             {
-              // deleting the current session values
-
-              sessionOBJ[session.cookieKey][key] = null;
-              delete sessionOBJ[session.cookieKey][key];
-              hasteObj.sessions = JSON.stringify(sessionOBJ);
-              return true;
+              return false;
             }
+
+            break;
           }
           else
           {
-            // else deleting the old session values
-
-            sessionOBJ[sessionCookie[i][1]][key] = null;
-            delete sessionOBJ[sessionCookie[i][1]][key];
-            hasteObj.sessions = JSON.stringify(sessionOBJ);
-            return true;
+            nullCount += 1;
           }
         }
-        else
-        {
-          nullCount += 1;
-        }
-      }
 
-      // if header cookie is not matched the checking for current cookie if exists then delete
-
-      if(nullCount == sessionCookieLen)
-      {
-        if(sessionOBJ[session.cookieKey][key] == undefined)
+        if(nullCount == sessionCookieLen)
         {
           return false;
         }
-        else
-        {
-          sessionOBJ[session.cookieKey][key] = null;
-          delete sessionOBJ[session.cookieKey][key];
-          hasteObj.sessions = JSON.stringify(sessionOBJ);
-          return true;
-        }
+      }
+      else
+      {
+        return false;
       }
     }
     else
     {
-      // same as above
-
-      if(sessionOBJ[session.cookieKey][key] == undefined)
-      {
-        return false;
-      }
-      else
-      {
-        sessionOBJ[session.cookieKey][key] = null;
-        delete sessionOBJ[session.cookieKey][key];
-        hasteObj.sessions = JSON.stringify(sessionOBJ);
-        return true;
-      }
+      return false;
     }
   },
   destroy:function()
   {
-    // gettting the session object
-
-    var sessionOBJ = JSON.parse(hasteObj.sessions);
-
-    // if the session cookie is not defined undefined then
-
-    if(hasteObj.request.headers.cookie != undefined)
+    var sessionValue = hasteObj.request.headers.cookie;
+    if(sessionValue != '')
     {
-      if(typeof(hasteObj.sessions) == 'undefined')
+      // if cookie is found
+      if(typeof(hasteObj.request.headers.cookie) != 'undefined')
       {
-        return false;
-      }
+        var sessionCookie = hasteObj.request.headers.cookie;
+        sessionCookie = sessionCookie.split(';');
+        var sessionCookieLen = sessionCookie.length;
+        var nullCount = 0;
 
-      // itearting through the cookie header
-
-      var sessionCookie = hasteObj.request.headers.cookie;
-      sessionCookie = sessionCookie.split(';');
-      var sessionCookieLen = sessionCookie.length;
-      var sessionKey = '';
-      let nullCount = 0;
-
-      for(var i=0;i<sessionCookieLen;i++)
-      {
-
-        // if the cookie session is found and matched
-
-        sessionCookie[i] = sessionCookie[i].split('=');
-        sessionKey = sessionCookie[i][0].trim();
-        if(sessionKey === 'HASTESSID')
+        for(var i=0;i<sessionCookieLen;i++)
         {
-          // checking for key value if exists then deleted and header is removed else
-          // checking for current session value existence if found done same as above
+          sessionCookie[i] = sessionCookie[i].split('=');
+          sessionKey = sessionCookie[i][0].trim();
 
-          if(sessionOBJ[sessionCookie[i][1]] == undefined)
+          if(sessionKey === 'HASTESSID')
           {
-            if(sessionOBJ[session.cookieKey] == undefined)
+            if(typeof(sessionObj[sessionCookie[i][1]]) != 'undefined')
             {
-              return false;
-            }
-            else
-            {
-              // removing the session values
-
-              sessionOBJ[session.cookieKey] = null;
-              delete sessionOBJ[session.cookieKey];
-              hasteObj.sessions = JSON.stringify(sessionOBJ);
+              sessionObj[sessionCookie[i][1]] = null;
+              delete sessionObj[sessionCookie[i][1]];
               hasteObj.response.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
               return true;
             }
+            else
+            {
+              return false;
+            }
+
+            break;
           }
           else
           {
-            // same as above
-
-            sessionOBJ[sessionCookie[i][1]] = null;
-            delete sessionOBJ[sessionCookie[i][1]];
-            hasteObj.sessions = JSON.stringify(sessionOBJ);
-            hasteObj.response.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
-            return true;
+            nullCount += 1;
           }
         }
-        else
-        {
-          nullCount += 1;
-        }
-      }
 
-      // if the session is found the checks for current session
-
-
-      if(nullCount == sessionCookieLen)
-      {
-        if(sessionOBJ[session.cookieKey] == undefined)
+        if(nullCount == sessionCookieLen)
         {
           return false;
         }
-        else
-        {
-          // if found then deleted
+      }
+      else
+      {
 
-          sessionOBJ[session.cookieKey] = null;
-          delete sessionOBJ[session.cookieKey];
-          hasteObj.sessions = JSON.stringify(sessionOBJ);
+        // if session is undefined but current session is not undefined then it is deleted else return false
+
+       if(typeof(sessionObj[session.currentSession]) != 'undefined')
+        {
+          sessionObj[session.currentSession] = null;
+          delete sessionObj[session.currentSession];
+          session.currentSession = '';
           hasteObj.response.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
           return true;
+        }
+        else
+        {
+          return false;
         }
       }
     }
     else
     {
-      // if no cookies found then checks for current session if found then deleted
-
-      if(sessionOBJ[session.cookieKey] == undefined)
+      // if session is empty and current session is not undefined
+      
+      if(typeof(sessionObj[session.currentSession]) != 'undefined')
       {
-        return false;
+        sessionObj[session.currentSession] = null;
+        delete sessionObj[session.currentSession];
+        session.currentSession = '';
+        hasteObj.response.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
+        return true;
       }
       else
       {
-        sessionOBJ[session.cookieKey] = null;
-        delete sessionOBJ[session.cookieKey];
-        hasteObj.sessions = JSON.stringify(sessionOBJ);
-        hasteObj.response.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
-        return true;
+        return false;
       }
     }
   }
 };
+
 
 // methods and objects exported
 
