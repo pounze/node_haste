@@ -12,10 +12,11 @@ module.exports = {
 		db:'tripkle'
 	},
 	mongoDB:{
-
+		server1:"mongodb://localhost:27017/religare"
 	},
 	redis:{
-		
+		host:'127.0.0.1',
+		port:6379
 	},
 	server:{
 		maintainance:false,

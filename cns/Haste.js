@@ -80,8 +80,6 @@ var Library = function(params)
 
 {
 
-  this.count = 0;
-
   this.input = {};
 
   this.staticPath = [];
@@ -497,19 +495,19 @@ haste.fn = Library.prototype =
 
 
 
-        if (req.headers['x-forwarded-for'])
+        if (hasteObj.request.headers['x-forwarded-for'])
 
         {
 
-            ip = req.headers['x-forwarded-for'].split(",")[0];
+            ip = hasteObj.request.headers['x-forwarded-for'].split(",")[0];
 
         }
 
-        else if(req.connection && req.connection.remoteAddress)
+        else if(hasteObj.request.connection && hasteObj.request.connection.remoteAddress)
 
         {
 
-            ip = req.connection.remoteAddress;
+            ip = hasteObj.request.connection.remoteAddress;
 
         } 
 
@@ -517,7 +515,7 @@ haste.fn = Library.prototype =
 
         {
 
-            ip = req.ip;
+            ip = hasteObj.request.ip;
 
         }
 
@@ -535,7 +533,7 @@ haste.fn = Library.prototype =
 
         {
 
-            res.writeHead(404,{
+            hasteObj.response.writeHead(404,{
 
               'Cache-Control':'public,max-age=31536000',
 
@@ -551,7 +549,7 @@ haste.fn = Library.prototype =
 
             });
 
-            res.end('Something went wrong');
+            hasteObj.response.end('Something went wrong');
 
             return false;
 
@@ -563,6 +561,7 @@ haste.fn = Library.prototype =
     {
         hasteObj.request = req;
         hasteObj.response = res;
+        session.currentSession = '';
         /*
 
             Main method of the entire framework
@@ -619,8 +618,6 @@ haste.fn = Library.prototype =
 
             hasteObj.response.end(JSON.stringify(data));
 
-            process.exit();
-
         }
 
 
@@ -632,7 +629,6 @@ haste.fn = Library.prototype =
         */
 
         hasteObj.request.on('error',function()
-
         {
 
             console.error('Error in server');
@@ -733,13 +729,94 @@ haste.fn = Library.prototype =
 
       let requestMethod = hasteObj.request.method;
 
-      let requestUri = url_module.parse(req.url).pathname;
+      let requestUri = url_module.parse(hasteObj.request.url).pathname;
 
       let ext = (/[.]/.exec(requestUri)) ? /[^.]+$/.exec(requestUri) : undefined;
 
       let myExp;
 
       let notMatchCount = 0;
+
+      let tempMapping = '';
+
+      /*
+        Cortex Concept for accessing apis more directly and easily
+      */
+
+      if(requestUri == '/cortex' && requestMethod == 'POST')
+      {
+        haste.fn.parsePost(hasteObj.request,function(data)
+        {
+
+          hasteObj.input['requestData'] = data;
+
+          try
+          {
+
+            if(typeof(hasteObj.input['requestData']['mapping']) != 'undefined' && hasteObj.input['requestData']['mapping'] != '')
+            {
+              tempMapping = hasteObj.input['requestData']['mapping'].split('.');
+              tempMapping = tempMapping.join('/');
+            }
+
+           var stat = fs.statSync('./controllers/'+tempMapping+'/'+hasteObj.input['requestData']['cortex']+'.js');
+
+            
+
+            if(stat.isFile())
+
+            {
+
+              var controller = require('../controllers/'+tempMapping+'/'+hasteObj.input['requestData']['cortex']+'.js');
+
+              controller.main(req,res,hasteObj.input);
+
+            }
+
+            else
+
+            {
+
+              console.error('Controller must me a javascript file'); 
+
+            }
+
+          }
+
+          catch(e)
+
+          {
+
+            hasteObj.response.writeHead(500,{
+
+              'Cache-Control':'public,max-age=31536000',
+
+              'Keep-Alive':' timeout=5, max=500',
+
+              'Expires':new Date(),
+
+              'Server': 'Node Server',
+
+              'Developed-By':'Pounze It-Solution Pvt Limited',
+
+              'Pragma': 'public,max-age=31536000'
+
+            });
+
+
+
+            var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
+
+            readerStream.pipe(res);
+
+            console.error(e);
+            return false;
+
+          }
+        });
+
+        return false;
+      }
 
 
 
@@ -770,7 +847,6 @@ haste.fn = Library.prototype =
         for(obj in hasteObj.globalObject)
 
         {
-
           /*
 
             
@@ -1136,9 +1212,9 @@ haste.fn = Library.prototype =
 
 
 
-                    res.setHeader('Content-Type','application/json');
+                    hasteObj.response.setHeader('Content-Type','application/json');
 
-                    res.end(JSON.stringify(middlewareCallbacks[1]));
+                    hasteObj.response.end(JSON.stringify(middlewareCallbacks[1]));
 
                     return false;
 
@@ -1174,7 +1250,7 @@ haste.fn = Library.prototype =
 
 
 
-                res.writeHead(500,{
+                hasteObj.response.writeHead(500,{
 
                   'Cache-Control':'public,max-age=31536000',
 
@@ -1227,9 +1303,9 @@ haste.fn = Library.prototype =
 
               {
 
-                res.setHeader('Content-Type','application/json');
+                hasteObj.response.setHeader('Content-Type','application/json');
 
-                res.end(JSON.stringify(middlewareCallbacks[1]));
+                hasteObj.response.end(JSON.stringify(middlewareCallbacks[1]));
 
                 return false;
 
@@ -1341,7 +1417,7 @@ haste.fn = Library.prototype =
 
         {
 
-          res.writeHead(500,{
+          hasteObj.response.writeHead(500,{
 
             'Cache-Control':'public,max-age=31536000',
 
@@ -1400,7 +1476,7 @@ haste.fn = Library.prototype =
 
         };
 
-        hasteObj.count += 1;
+        this.path = uri;
 
         return this;
 
@@ -1426,7 +1502,7 @@ haste.fn = Library.prototype =
 
         };
 
-        hasteObj.count += 1;
+        this.path = uri;
 
         return this;
 
@@ -1436,31 +1512,7 @@ haste.fn = Library.prototype =
 
     {   
 
-      // adding middle wares
-
-
-
-      let localCount = 0;
-
-
-
-      for(key in hasteObj.globalObject)
-
-      {
-
-        localCount += 1;
-
-
-
-        if(localCount == hasteObj.count)
-
-        {
-
-          hasteObj.globalObject[key].middleware = middleware;
-
-        }
-
-      }
+      hasteObj.globalObject[this.path].middleware = middleware;
 
       return this;
 
@@ -1472,45 +1524,14 @@ haste.fn = Library.prototype =
 
       // checking for regular expression match
 
+      hasteObj.globalObject[this.path].regexExp = regex;
 
+      hasteObj.globalObject[this.path]['regex'] = hasteObj.globalObject[this.path]['uri'];
 
-      let localCount = 0;
-
-
-
-      for(key in hasteObj.globalObject)
-
+      for(regex in hasteObj.globalObject[this.path]['regexExp'])
       {
-
-          localCount += 1;
-
-
-
-          if(localCount == hasteObj.count)
-
-          {
-
-              hasteObj.globalObject[key].regexExp = regex;
-
-          }
-
+        hasteObj.globalObject[this.path]['regex'] = hasteObj.globalObject[this.path]['regex'].replace(regex,hasteObj.globalObject[this.path]['regexExp'][regex]);
       }
-
-
-
-      hasteObj.globalObject[key]['regex'] = hasteObj.globalObject[key]['uri'];
-
-
-
-      for(regex in hasteObj.globalObject[key]['regexExp'])
-
-      {
-
-          hasteObj.globalObject[key]['regex'] = hasteObj.globalObject[key]['regex'].replace(regex,hasteObj.globalObject[key]['regexExp'][regex]);
-
-      }
-
-
 
       return this;
 
@@ -1540,7 +1561,7 @@ haste.fn = Library.prototype =
 
             var views = require('../common_templates/common_templates.js');
 
-            views.main(req,res,data);
+            var commongData = views.main(req,res,data);
 
 
 
@@ -1558,7 +1579,7 @@ haste.fn = Library.prototype =
 
                   var views = require('../templates/'+file+'.js');
 
-                  views.main(req,res,data);
+                  views.main(req,res,data,commongData);
 
                 }
 
@@ -1576,7 +1597,7 @@ haste.fn = Library.prototype =
 
             {
 
-                res.writeHead(500,{
+                hasteObj.response.writeHead(500,{
 
                   'Cache-Control':'public,max-age=31536000',
 
@@ -1612,7 +1633,7 @@ haste.fn = Library.prototype =
 
       {
 
-        res.writeHead(500,{
+        hasteObj.response.writeHead(500,{
 
           'Cache-Control':'public,max-age=31536000',
 
@@ -1643,7 +1664,6 @@ haste.fn = Library.prototype =
     },
 
     AllowDirectories:function(path)
-
     {
 
         // allow folders to get accessed
@@ -1660,7 +1680,7 @@ haste.fn = Library.prototype =
 
         // parse get request
 
-        var url_parsed = url_module.parse(req.url,true);
+        var url_parsed = url_module.parse(hasteObj.request.url,true);
 
         callback(url_parsed['query']);
 
@@ -1672,7 +1692,7 @@ haste.fn = Library.prototype =
 
 
 
-        if(typeof(req.headers['content-type']) != 'undefined')
+        if(typeof(hasteObj.request.headers['content-type']) != 'undefined')
 
         {
 
@@ -1680,7 +1700,7 @@ haste.fn = Library.prototype =
 
 
 
-          if((req.method == 'POST' &&  req.headers['content-type'].match(/(multipart\/form\-data\;)/g)))
+          if((hasteObj.request.method == 'POST' &&  hasteObj.request.headers['content-type'].match(/(multipart\/form\-data\;)/g)))
 
           {
 
@@ -1726,7 +1746,7 @@ haste.fn = Library.prototype =
 
             var body = '';
 
-            req.on('data',function(data)
+            hasteObj.request.on('data',function(data)
 
             {
 
@@ -1734,11 +1754,11 @@ haste.fn = Library.prototype =
 
             });
 
-            req.on('end',function()
+            hasteObj.request.on('end',function()
 
             {
 
-              if(req.headers['content-type'] == 'application/json')
+              if(hasteObj.request.headers['content-type'] == 'application/json')
 
               {
 
@@ -1915,7 +1935,7 @@ function Authorization(req)
 
     {
 
-        let auth = req.headers['authorization'].split(' ')[1];
+        let auth = hasteObj.request.headers['authorization'].split(' ')[1];
 
         let decodedHeader = new Buffer(auth, 'base64').toString();
 
@@ -1947,7 +1967,7 @@ function getCookies(req)
 
 {
 
-    var list = {},rc = req.headers.cookie;
+    var list = {},rc = hasteObj.request.headers.cookie;
 
 
 
@@ -2009,11 +2029,11 @@ function getUserAgent(req)
 
     {
 
-        if(typeof(req.headers['user-agent']) != 'undefined' && req.headers['user-agent'] != '')
+        if(typeof(hasteObj.request.headers['user-agent']) != 'undefined' && hasteObj.request.headers['user-agent'] != '')
 
         {
 
-            return req.headers['user-agent'];
+            return hasteObj.request.headers['user-agent'];
 
         }
 
@@ -2053,7 +2073,7 @@ function sendAuthorization(msg,res)
 
     {
 
-        res.writeHead(401,{
+        hasteObj.response.writeHead(401,{
 
           'Cache-Control':'public,max-age=31536000',
 
@@ -2101,7 +2121,7 @@ function checkAuth(req)
 
 {
 
-    if(typeof(req.headers['authorization']) == 'undefined')
+    if(typeof(hasteObj.request.headers['authorization']) == 'undefined')
 
     {
 
@@ -2154,6 +2174,8 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
       var stat = fs.statSync('./views/'+page+'.html');
 
       var data = '';
+
+      var regexData;
 
 
 
@@ -2222,11 +2244,9 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
           {
 
             for(var i=0; i<findLen; i++)
-
-            {
-
-              data = data.replace(find[i],replace[i]);
-
+            { 
+              regexData = new RegExp(find[i].replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'),"g");
+              data = data.replace(regexData, replace[i]);
             }
 
             if(headers == null)
@@ -2236,7 +2256,7 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
                 if(!hasteObj.cookieStatus)
 
                 {
-                    res.writeHead(200,{
+                    hasteObj.response.writeHead(200,{
 
                       'Content-Length':data.length,
 
@@ -2260,7 +2280,7 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
 
                 else
                 {
-                    res.writeHead(200,{
+                    hasteObj.response.writeHead(200,{
 
                       'Content-Length':data.length,
 
@@ -2289,13 +2309,13 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
             else
 
             {
-                res.writeHead(code,headers);
+                hasteObj.response.writeHead(code,headers);
 
             }
 
             
 
-            res.end(data);
+            hasteObj.response.end(data);
 
           }
 
@@ -2315,7 +2335,7 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
 
         {
 
-         res.writeHead(404,{
+         hasteObj.response.writeHead(404,{
 
               'Cache-Control':'public,max-age=31536000',
 
@@ -2353,7 +2373,7 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
 
     {
 
-        res.writeHead(500,{
+        hasteObj.response.writeHead(500,{
 
           'Cache-Control':'public,max-age=31536000',
 
@@ -2521,12 +2541,9 @@ function formatDate(date,callback)
 
 
 
-function Hash(method,string,encoding,callback)
+function Hash(method,string,encoding)
 
 {
-
-    console.error(string);
-
     var crypto = require('crypto');
 
     var hash = '';
@@ -2631,7 +2648,7 @@ function Hash(method,string,encoding,callback)
 
 
 
-    callback(hash);
+    return hash;
 
 }
 
@@ -2673,7 +2690,7 @@ function RemoteRequest(params,callback)
 
         // on data event is fired call back is append into data variable
 
-        res.on('data', function(chunk)
+        hasteObj.response.on('data', function(chunk)
 
         {
 
@@ -2683,7 +2700,7 @@ function RemoteRequest(params,callback)
 
         // after ending the request
 
-        res.on('end',function()
+        hasteObj.response.on('end',function()
 
         {
 
@@ -2697,7 +2714,7 @@ function RemoteRequest(params,callback)
 
 
 
-      req.on('error',function(e)
+      hasteObj.request.on('error',function(e)
 
       {
 
@@ -2709,9 +2726,9 @@ function RemoteRequest(params,callback)
 
       // write data to request body
 
-      req.write(JSON.stringify(postData));
+      hasteObj.request.write(JSON.stringify(postData));
 
-      req.end();
+      hasteObj.request.end();
 
     }
 
@@ -2739,7 +2756,7 @@ function RemoteRequest(params,callback)
 
         // on data event is fired call back is append into data variable
 
-        res.on('data', function(chunk)
+        hasteObj.response.on('data', function(chunk)
 
         {
 
@@ -2749,7 +2766,7 @@ function RemoteRequest(params,callback)
 
         // after ending the request
 
-        res.on('end',function()
+        hasteObj.response.on('end',function()
 
         {
 
@@ -2763,7 +2780,7 @@ function RemoteRequest(params,callback)
 
 
 
-      req.on('error',function(e)
+      hasteObj.request.on('error',function(e)
 
       {
 
@@ -2777,9 +2794,9 @@ function RemoteRequest(params,callback)
 
 
 
-      req.write(JSON.stringify(postData));
+      hasteObj.request.write(JSON.stringify(postData));
 
-      req.end();
+      hasteObj.request.end();
 
 
 
@@ -3446,122 +3463,102 @@ let mySQL = {
 
 };
 
-/*
-  create unique session id
-*/
-function makeid()
-{
-  var text = "";
-  var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"+(new Date).getTime();
-
-  for (var i = 0; i < 30; i++)
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
-
-  return text;
-}
-
-/*
-  session object, this session object sets value in memory not in file so reseting server will delete all sessions
-*/
 
 let session = {
   currentSession:'',
-  // setting session values
   set:function(key,value)
   {
-    var sessionValue = hasteObj.request.headers.cookie;
+    // if cookie is not undefined
 
-    // if cookie is found
-
-    if(sessionValue != '')
+    if(typeof(hasteObj.request.headers.cookie) != 'undefined')
     {
-      // if cookie is not undefined
+      // getting the number of session cookie
 
-      if(typeof(hasteObj.request.headers.cookie) != 'undefined')
+      var sessionCookie = hasteObj.request.headers.cookie;
+      sessionCookie = sessionCookie.split(';');
+      var sessionCookieLen = sessionCookie.length;
+      var nullCount = 0;
+
+      // iterating through the session
+
+      for(var i=0;i<sessionCookieLen;i++)
       {
-        // getting the number of session cookie
+        // spliting the session into array
 
-        var sessionCookie = hasteObj.request.headers.cookie;
-        sessionCookie = sessionCookie.split(';');
-        var sessionCookieLen = sessionCookie.length;
-        var nullCount = 0;
+        sessionCookie[i] = sessionCookie[i].split('=');
+        sessionKey = sessionCookie[i][0].trim();
 
-        // iterating through the session
+        // if the hastssid cookie is found
 
-        for(var i=0;i<sessionCookieLen;i++)
+        if(sessionKey === 'HASTESSID')
         {
-          // spliting the session into array
+          // if the session value is undefined
 
-          sessionCookie[i] = sessionCookie[i].split('=');
-          sessionKey = sessionCookie[i][0].trim();
-
-          // if the hastssid cookie is found
-
-          if(sessionKey === 'HASTESSID')
+          if(typeof(sessionObj[sessionCookie[i][1]]) == 'undefined')
           {
-            // if the session value is undefined
+            // then creating object
 
-            if(typeof(sessionObj[sessionCookie[i][1]]) == 'undefined')
-            {
-              // then creating object
-
-              sessionObj[sessionCookie[i][1]] = {};
-            }
-            // and setting value to it
-
-            sessionObj[sessionCookie[i][1]]['time'] = new Date();
-            sessionObj[sessionCookie[i][1]][key] = value;
-            break;
+            sessionObj[sessionCookie[i][1]] = {};
           }
-          else
-          {
-            // else incrementing the nullCount
-            nullCount += 1;
-          }
+          // and setting value to it
+
+          sessionObj[sessionCookie[i][1]]['time'] = new Date();
+          sessionObj[sessionCookie[i][1]][key] = value;
+          break;
         }
-
-        // if nullCount == sessionCookieLen
-
-        if(nullCount == sessionCookieLen)
+        else
         {
-          // creating session new id
-
-          session.currentSession = makeid();
-
-          // if object is undefined then creating new object
-
-          if(sessionObj[session.currentSession] == undefined)
-          {
-            sessionObj[session.currentSession] = {};
-          }
-
-          // setting value to the object
-          sessionObj[session.currentSession][key] = value;
-          sessionObj[session.currentSession]['time'] = new Date();
-          hasteObj.response.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
+          // else incrementing the nullCount
+          nullCount += 1;
         }
       }
-      else
-      {
 
-        // session cookie is undefined
-        // creating new id and checking if object exists
+      // if nullCount == sessionCookieLen
+
+      if(nullCount == sessionCookieLen)
+      {
+        // creating session new id
+
         session.currentSession = makeid();
+
+        // if object is undefined then creating new object
+
         if(sessionObj[session.currentSession] == undefined)
-        { 
+        {
           sessionObj[session.currentSession] = {};
         }
 
-        // setting values to object and setting header with session cookie
-
+        // setting value to the object
         sessionObj[session.currentSession][key] = value;
         sessionObj[session.currentSession]['time'] = new Date();
         hasteObj.response.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
       }
     }
-  },
+    else
+    {
+      if(session.currentSession == '')
+      {
+        // creating session new id
 
-  // getting the session values
+        session.currentSession = makeid();
+
+        if(sessionObj[session.currentSession] == undefined)
+        {
+          sessionObj[session.currentSession] = {};
+        }
+
+        sessionObj[session.currentSession][key] = value;
+        sessionObj[session.currentSession]['time'] = new Date();
+      }
+      else
+      {
+        sessionObj[session.currentSession][key] = value;
+        sessionObj[session.currentSession]['time'] = new Date();
+      }
+
+      hasteObj.response.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
+    }
+  },
   get:function(key)
   {
     // getting the cookie headers
@@ -3620,10 +3617,10 @@ let session = {
       {
         // if cookie is undefined and current session is not undefined then it is returned else null
 
-        if(sessionObj[session.currentSession] != undefined)
+        if(sessionObj[this.currentSession] != undefined)
         {
-          sessionObj[session.currentSession]['time'] = new Date();
-          return sessionObj[session.currentSession][key];
+          sessionObj[this.currentSession]['time'] = new Date();
+          return sessionObj[this.currentSession][key];
         }
         else
         {
@@ -3741,11 +3738,11 @@ let session = {
 
         // if session is undefined but current session is not undefined then it is deleted else return false
 
-       if(typeof(sessionObj[session.currentSession]) != 'undefined')
+       if(typeof(sessionObj[this.currentSession]) != 'undefined')
         {
-          sessionObj[session.currentSession] = null;
-          delete sessionObj[session.currentSession];
-          session.currentSession = '';
+          sessionObj[this.currentSession] = null;
+          delete sessionObj[this.currentSession];
+          this.currentSession = '';
           hasteObj.response.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
           return true;
         }
@@ -3759,11 +3756,11 @@ let session = {
     {
       // if session is empty and current session is not undefined
       
-      if(typeof(sessionObj[session.currentSession]) != 'undefined')
+      if(typeof(sessionObj[this.currentSession]) != 'undefined')
       {
-        sessionObj[session.currentSession] = null;
-        delete sessionObj[session.currentSession];
-        session.currentSession = '';
+        sessionObj[this.currentSession] = null;
+        delete sessionObj[this.currentSession];
+        this.currentSession = '';
         hasteObj.response.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
         return true;
       }
@@ -3780,7 +3777,7 @@ let session = {
       var date = new Date();
       for(var key in sessionObj)
       {
-        if(config.server.sessionTimeout == undefined)
+        if(config.server.sessionTimeout == undefined || typeof(config.server.sessionTimeout) != 'number' || config.server.sessionTimeout == '')
         {
           if(Math.round((date - sessionObj[key]['time'])/1000) > 30)
           {
@@ -3803,6 +3800,344 @@ let session = {
 
 session.clearSession();
 
+function regexParser(matcher,regex,output)
+{
+  var regularExp = '';
+  /*
+  start iterating in matcher object
+  */
+  for(var key in regex)
+  {
+  /*
+  If the matcher[key] is an array
+  */
+    if(Array.isArray(matcher[key]))
+    {
+      /*
+      initialize an array of output object
+      */
+      output[key] = [];
+      for(var counter in matcher[key])
+      {
+        /*
+        iterating through matcher[key] for nester object
+        and creating new object into output[key][counter]
+        */
+        output[key][counter] = {};
+        for(var subKey in regex[key][counter])
+        {
+          if(matcher[key][counter][subKey] != null && typeof(matcher[key][counter][subKey]) != 'undefined')
+          {
+            /*
+            Iterating through matcher[key][counter] to navigate through array
+            */
+            if(typeof(matcher[key][counter][subKey]) != regex[key][0][subKey]['datatype'])
+            {
+              /*
+              if key value does not match the data type then it checks for default value existence else through an error
+              */
+              if(typeof(regex[key][0][subKey]['default']) != 'undefined')
+              {
+                output[key][counter][subKey] = regex[key][0][subKey]['default'];
+              }
+              else
+              {
+                matcher = null;
+                regex = null;
+                delete matcher;
+                delete regex;
+                return {node:key,msg:'Failed to match',status:false};
+              }
+
+              /*
+                Regular Expression Match
+              */
+
+              if(typeof(regex[key][0][subKey]['regex']) != 'undefined')
+              {
+                // console.error(regex[key][0][subKey]['regex']);
+                regularExp = new RegExp(regex[key][0][subKey]['regex'],"g");
+                if(!matcher[key][counter][subKey].match(regularExp))
+                {
+                  matcher = null;
+                  regex = null;
+                  delete matcher;
+                  delete regex;
+                  return {node:key,msg:'Does not match the regular expression',status:false};
+                }
+              }
+
+              /*
+                Check for empty
+              */
+
+              if(typeof(regex[key][0][subKey]['empty']) != 'undefined')
+              {
+                if(matcher[key][counter][subKey] == '')
+                {
+                  matcher = null;
+                  regex = null;
+                  delete matcher;
+                  delete regex;
+                  return {node:key,msg:'Cannot be empty',status:false};
+                }
+              }
+
+              /*
+                remove elements
+              */
+
+              if(typeof(regex[key][0][subKey]['remove']) != 'undefined' && regex[key][0][subKey]['remove'] == true)
+              {
+                matcher[key][counter][subKey] = null;
+                delete matcher[key][counter][subKey];
+              }
+            }
+            else
+            {
+              /*
+              else copying data and array to output object
+              */
+              output[key][counter][subKey] = matcher[key][counter][subKey];
+
+              /*
+                Regular Expression Match
+              */
+
+              if(typeof(regex[key][0][subKey]['regex']) != 'undefined')
+              {
+                // console.error(regex[key][0][subKey]['regex']);
+                regularExp = new RegExp(regex[key][0][subKey]['regex'],"g");
+                if(!matcher[key][counter][subKey].match(regularExp))
+                {
+                  matcher = null;
+                  regex = null;
+                  delete matcher;
+                  delete regex;
+                  return {node:key,msg:'Does not match the regular expression',status:false};
+                }
+              }
+
+              /*
+                Check for empty
+              */
+
+              if(typeof(regex[key][0][subKey]['empty']) != 'undefined')
+              {
+                if(matcher[key][counter][subKey] == '')
+                {
+                  matcher = null;
+                  regex = null;
+                  delete matcher;
+                  delete regex;
+                  return {node:key,msg:'Cannot be empty',status:false};
+                }
+              }
+
+              /*
+                remove elements
+              */
+
+              if(typeof(regex[key][0][subKey]['remove']) != 'undefined' && regex[key][0][subKey]['remove'] == true)
+              {
+                matcher[key][counter][subKey] = null;
+                delete matcher[key][counter][subKey];
+              }
+            }
+          }
+          else
+          {
+            /*
+            if key value does not match the data type then it checks for default value existence else through an error
+            */
+            if(typeof(regex[key][0][subKey]['default']) != 'undefined')
+            {
+              output[key][counter][subKey] = regex[key][0][subKey]['default'];
+            }
+            else
+            {
+              matcher = null;
+              regex = null;
+              delete matcher;
+              delete regex;
+              return {node:key,msg:'cannot be null',status:false};
+            }
+          }
+        }
+      }
+    }
+    else
+    {
+      if(matcher[key] != null && typeof(matcher[key]) != 'undefined')
+      {
+        /*
+        If it not found an array then datatype is matched directly if matched the copying data to output object
+        else throw an error
+        */
+
+        if(typeof(matcher[key]) != regex[key]['datatype'])
+        {
+          /*
+          it checks if any default value is stored
+          */
+          if(typeof(regex[key]['default']) != 'undefined')
+          {
+            output[key] = regex[key]['default'];
+          }
+          else
+          {
+            matcher = null;
+            regex = null;
+            delete matcher;
+            delete regex;
+            return {node:key,msg:'Failed to match',status:false};
+          }
+
+          /*
+            Regular Expression Match
+          */
+
+          if(typeof(regex[key]['regex']) != 'undefined')
+          {
+
+            regularExp = new RegExp(regex[key]['regex'],"g");
+            if(!matcher[key].match(regularExp))
+            {
+              matcher = null;
+              regex = null;
+              delete matcher;
+              delete regex;
+              return {node:key,msg:'Does not match the regular expression',status:false};
+            }
+          }
+
+          /*
+            Check for empty
+          */
+
+          if(typeof(regex[key]['empty']) != 'undefined')
+          {
+            if(matcher[key] == '')
+            {
+              matcher = null;
+              regex = null;
+              delete matcher;
+              delete regex;
+              return {node:key,msg:'Cannot be empty',status:false};
+            }
+          }
+
+          /*
+            remove elements
+          */
+
+          if(typeof(regex[key]['remove']) != 'undefined' && regex[key]['remove'] == true)
+          {
+            matcher[key] = null;
+            delete matcher[key];
+          }
+        }
+        else
+        {
+          output[key] = matcher[key];
+
+          /*
+            Regular Expression Match
+          */
+
+          if(typeof(regex[key]['regex']) != 'undefined')
+          {
+
+            regularExp = new RegExp(regex[key]['regex'],"g");
+
+            if(!matcher[key].match(regularExp))
+            {
+              matcher = null;
+              regex = null;
+              delete matcher;
+              delete regex;
+              return {node:key,msg:'Does not match the regular expression',status:false};
+            }
+          }
+
+          /*
+            Check for empty
+          */
+
+          if(typeof(regex[key]['empty']) != 'undefined')
+          {
+            if(matcher[key] == '')
+            {
+              matcher = null;
+              regex = null;
+              delete matcher;
+              delete regex;
+              return {node:key,msg:'Cannot be empty',status:false};
+            }
+          }
+
+          /*
+            remove elements
+          */
+
+          if(typeof(regex[key]['remove']) != 'undefined' && regex[key]['remove'] == true)
+          {
+            matcher[key] = null;
+            delete matcher[key];
+          }
+        }
+      }
+      else
+      {
+        /*
+        it checks if any default value is stored
+        */
+        if(typeof(regex[key]['default']) != 'undefined')
+        {
+          output[key] = regex[key]['default'];
+        }
+        else
+        {
+          matcher = null;
+          regex = null;
+          delete matcher;
+          delete regex;
+          return {node:key,msg:'cannot be null',status:false};
+        }
+      }
+      if(regex.hasOwnProperty(key) && typeof(regex[key]) == 'object' && typeof(matcher[key]) != 'undefined')
+      {
+        regexParser(matcher[key], regex[key],output[key]);
+      }
+    }
+  }
+  matcher = null;
+  regex = null;
+  delete matcher;
+  delete regex;
+  return {node:output,msg:'All nodes matched',status:true}
+}
+
+/*
+  create unique session id
+*/
+function makeid()
+{
+  var text = "";
+  var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"+(new Date).getTime();
+
+  for (var i = 0; i < 30; i++)
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+
+  return text;
+}
+
+/*
+  session object, this session object sets value in memory not in file so reseting server will delete all sessions
+*/
+
+
+
 
 // methods and objects exported
 
@@ -3812,7 +4147,7 @@ exports.renderPage = renderPage;
 
 exports.mySQL = mySQL;
 
-
+exports.regexParser = regexParser;
 
 exports.fileCopy = fileCopy;
 
