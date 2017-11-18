@@ -42,9 +42,7 @@ const qs = require('querystring');
 
 const config = require(__dirname+'/config.js');
 
-const sessionObj = require('./session.js');
-
-
+const sessionObj = require(__dirname+'/session.js');
 
 
 
@@ -533,21 +531,24 @@ haste.fn = Library.prototype =
 
         {
 
-            hasteObj.response.writeHead(404,{
+            if(!hasteObj.response.headersSent)
+            {
+              hasteObj.response.writeHead(404,{
 
-              'Cache-Control':'public,max-age=31536000',
+                'Cache-Control':'public,max-age=31536000',
 
-              'Keep-Alive':' timeout=5, max=500',
+                'Keep-Alive':' timeout=5, max=500',
 
-              'Expires':new Date(),
+                'Expires':new Date(),
 
-              'Server': 'Node Server',
+                'Server': 'Node Server',
 
-              'Developed-By':'Pounze It-Solution Pvt Limited',
+                'Developed-By':'Pounze It-Solution Pvt Limited',
 
-              'Pragma': 'public,max-age=31536000'
+                'Pragma': 'public,max-age=31536000'
 
-            });
+              });
+            }
 
             hasteObj.response.end('Something went wrong');
 
@@ -667,21 +668,25 @@ haste.fn = Library.prototype =
 
         {
 
-            hasteObj.response.writeHead(303,{
+            if(!hasteObj.response.headersSent)
+            {
+              hasteObj.response.writeHead(303,{
 
-              'Cache-Control':'public,max-age=31536000',
+                'Cache-Control':'public,max-age=31536000',
 
-              'Keep-Alive':' timeout=5, max=500',
+                'Keep-Alive':' timeout=5, max=500',
 
-              'Expires':new Date(),
+                'Expires':new Date(),
 
-              'Server': 'Node Server',
+                'Server': 'Node Server',
 
-              'Developed-By':'Pounze It-Solution Pvt Limited',
+                'Developed-By':'Pounze It-Solution Pvt Limited',
 
-              'Pragma': 'public,max-age=31536000'
+                'Pragma': 'public,max-age=31536000'
 
-            });
+              });
+            }
+            
 
 
 
@@ -787,21 +792,25 @@ haste.fn = Library.prototype =
 
           {
 
-            hasteObj.response.writeHead(500,{
+            if(!hasteObj.response.headersSent)
+            {
+              hasteObj.response.writeHead(500,{
 
-              'Cache-Control':'public,max-age=31536000',
+                'Cache-Control':'public,max-age=31536000',
 
-              'Keep-Alive':' timeout=5, max=500',
+                'Keep-Alive':' timeout=5, max=500',
 
-              'Expires':new Date(),
+                'Expires':new Date(),
 
-              'Server': 'Node Server',
+                'Server': 'Node Server',
 
-              'Developed-By':'Pounze It-Solution Pvt Limited',
+                'Developed-By':'Pounze It-Solution Pvt Limited',
 
-              'Pragma': 'public,max-age=31536000'
+                'Pragma': 'public,max-age=31536000'
 
-            });
+              });
+            }
+            
 
 
 
@@ -939,21 +948,24 @@ haste.fn = Library.prototype =
 
         {
 
-            hasteObj.response.writeHead(404,{
+            if(!hasteObj.response.headersSent)
+            {
+              hasteObj.response.writeHead(404,{
 
-              'Cache-Control':'public,max-age=31536000',
+                'Cache-Control':'public,max-age=31536000',
 
-              'Keep-Alive':' timeout=5, max=500',
+                'Keep-Alive':' timeout=5, max=500',
 
-              'Expires':new Date(),
+                'Expires':new Date(),
 
-              'Server': 'Node Server',
+                'Server': 'Node Server',
 
-              'Developed-By':'Pounze It-Solution Pvt Limited',
+                'Developed-By':'Pounze It-Solution Pvt Limited',
 
-              'Pragma': 'public,max-age=31536000'
+                'Pragma': 'public,max-age=31536000'
 
-            });
+              });
+            }
 
            var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
 
@@ -969,91 +981,208 @@ haste.fn = Library.prototype =
 
       {
 
-        // checking for static files and have access to that folder
-
-
-
-        let staticFilelength = (hasteObj.staticPath == '') ? 0 : hasteObj.staticPath.length;
-
-        let notMatchCount = 0;
-
-
-
-        for(var i=0; i<staticFilelength; i++)
-
+        try
         {
-
-          url = hasteObj.staticPath[i].replace('/',"\\/");
-
-          
-
-          myExp = new RegExp(url+"[a-z0-9A-Z\.]*","i");
+          // checking for static files and have access to that folder
 
 
 
-          if(requestUri.match(myExp))
+          let staticFilelength = (hasteObj.staticPath == '') ? 0 : hasteObj.staticPath.length;
+
+          let notMatchCount = 0;
+
+
+
+          for(var i=0; i<staticFilelength; i++)
 
           {
 
-            switch(PATHNAME.extname(ext['input']))
+            url = hasteObj.staticPath[i].replace('/',"\\/");
+
+            
+
+            myExp = new RegExp(url+"[a-z0-9A-Z\.]*","i");
+
+
+
+            if(requestUri.match(myExp))
 
             {
 
-              case '.css': hasteObj.response.setHeader("Content-Type", "text/css");
+              switch(PATHNAME.extname(ext['input']))
+
+              {
+
+                case '.css': hasteObj.response.setHeader("Content-Type", "text/css");
+
+                break;
+
+                case '.ico' : hasteObj.response.setHeader("Content-Type","image/ico");
+
+                break;
+
+                case '.js' : hasteObj.response.setHeader("Content-Type", "text/javascript");
+
+                break;
+
+                case '.jpeg' : hasteObj.response.setHeader("Content-Type", "image/jpg");
+
+                break;
+
+                case '.jpg' : hasteObj.response.setHeader("Content-Type", "image/jpg");
+
+                break;
+
+                case '.png' : hasteObj.response.setHeader("Content-Type", "image/png");
+
+                break;
+
+                case '.gif' : hasteObj.response.setHeader("Content-Type", "image/gif");
+
+                break;
+
+                case '.json' : hasteObj.response.setHeader("Content-Type", "application/json");
+
+                break;
+
+                case '.pdf' : hasteObj.response.setHeader("Content-Type", "application/pdf");
+
+                break;
+
+                case '.ttf' : hasteObj.response.setHeader("Content-Type", "application/octet-stream");
+
+                break;
+
+                case '.html' : hasteObj.response.setHeader("Content-Type", "text/html");
+
+                break;
+
+                case '.woff' : hasteObj.response.setHeader("Content-Type", "application/x-font-woff");
+
+                break;
+
+                default : hasteObj.response.setHeader("Content-Type", "text/plain");
+
+              }
+
+
+              if(!hasteObj.response.headersSent)
+              {
+                hasteObj.response.writeHead(200,{
+
+                  'Cache-Control':'public,max-age=31536000',
+
+                  'Keep-Alive':' timeout=5, max=500',
+
+                  'Expires':new Date(),
+
+                  'Server': 'Node Server',
+
+                  'Developed-By':'Pounze It-Solution Pvt Limited',
+
+                  'Pragma': 'public,max-age=31536000'
+
+                });
+              }
+              
+
+
+              var statSync = fs.statSync('./'+requestUri);
+
+              if(statSync.isFile())
+              {
+                readerStream = fs.createReadStream('./'+requestUri);
+
+                readerStream.pipe(hasteObj.response);
+              }
+              else
+              {
+                if(!hasteObj.response.headersSent)
+                {
+                  hasteObj.response.writeHead(404,{
+
+                  'Cache-Control':'public,max-age=31536000',
+
+                  'Keep-Alive':' timeout=5, max=500',
+
+                  'Expires':new Date(),
+
+                  'Server': 'Node Server',
+
+                  'Developed-By':'Pounze It-Solution Pvt Limited',
+
+                  'Pragma': 'public,max-age=31536000'
+
+                  });
+                }
+                
+
+
+
+                var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
+
+                readerStream.pipe(hasteObj.response);
+              }
 
               break;
-
-              case '.ico' : hasteObj.response.setHeader("Content-Type","image/ico");
-
-              break;
-
-              case '.js' : hasteObj.response.setHeader("Content-Type", "text/javascript");
-
-              break;
-
-              case '.jpeg' : hasteObj.response.setHeader("Content-Type", "image/jpg");
-
-              break;
-
-              case '.jpg' : hasteObj.response.setHeader("Content-Type", "image/jpg");
-
-              break;
-
-              case '.png' : hasteObj.response.setHeader("Content-Type", "image/png");
-
-              break;
-
-              case '.gif' : hasteObj.response.setHeader("Content-Type", "image/gif");
-
-              break;
-
-              case '.json' : hasteObj.response.setHeader("Content-Type", "application/json");
-
-              break;
-
-              case '.pdf' : hasteObj.response.setHeader("Content-Type", "application/pdf");
-
-              break;
-
-              case '.ttf' : hasteObj.response.setHeader("Content-Type", "application/octet-stream");
-
-              break;
-
-              case '.html' : hasteObj.response.setHeader("Content-Type", "text/html");
-
-              break;
-
-              case '.woff' : hasteObj.response.setHeader("Content-Type", "application/x-font-woff");
-
-              break;
-
-              default : hasteObj.response.setHeader("Content-Type", "text/plain");
 
             }
 
+            else
+
+            {
+
+              notMatchCount += 1;
+
+            }
+
+          }
 
 
-            hasteObj.response.writeHead(200,{
+
+          // if no match found 404 error is thrown
+
+
+
+          if(notMatchCount == staticFilelength)
+
+          {
+
+            if(!hasteObj.response.headersSent)
+            {
+              hasteObj.response.writeHead(403,{
+
+                'Cache-Control':'public,max-age=31536000',
+
+                'Keep-Alive':' timeout=5, max=500',
+
+                'Expires':new Date(),
+
+                'Server': 'Node Server',
+
+                'Developed-By':'Pounze It-Solution Pvt Limited',
+
+                'Pragma': 'public,max-age=31536000'
+
+                });
+            }
+            
+
+
+
+              var readerStream = fs.createReadStream('./error_files/'+config.errorPages.DirectoryAccess);
+
+              readerStream.pipe(hasteObj.response);
+
+              return false;
+
+          }
+        }
+        catch(e)
+        {
+          if(!hasteObj.response.headersSent)
+          {
+            hasteObj.response.writeHead(500,{
 
               'Cache-Control':'public,max-age=31536000',
 
@@ -1068,63 +1197,14 @@ haste.fn = Library.prototype =
               'Pragma': 'public,max-age=31536000'
 
             });
-
-
-
-            readerStream = fs.createReadStream('./'+requestUri);
-
-            readerStream.pipe(hasteObj.response);
-
-
-
-            break;
-
           }
+          
 
-          else
+         var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
 
-          {
+         readerStream.pipe(hasteObj.response);
 
-            notMatchCount += 1;
-
-          }
-
-        }
-
-
-
-        // if no match found 404 error is thrown
-
-
-
-        if(notMatchCount == staticFilelength)
-
-        {
-
-          hasteObj.response.writeHead(403,{
-
-            'Cache-Control':'public,max-age=31536000',
-
-            'Keep-Alive':' timeout=5, max=500',
-
-            'Expires':new Date(),
-
-            'Server': 'Node Server',
-
-            'Developed-By':'Pounze It-Solution Pvt Limited',
-
-            'Pragma': 'public,max-age=31536000'
-
-            });
-
-
-
-            var readerStream = fs.createReadStream('./error_files/'+config.errorPages.DirectoryAccess);
-
-            readerStream.pipe(hasteObj.response);
-
-            return false;
-
+         return false;
         }
 
       }
@@ -1250,21 +1330,25 @@ haste.fn = Library.prototype =
 
 
 
-                hasteObj.response.writeHead(500,{
+                if(!hasteObj.response.headersSent)
+                {
+                  hasteObj.response.writeHead(500,{
 
-                  'Cache-Control':'public,max-age=31536000',
+                    'Cache-Control':'public,max-age=31536000',
 
-                  'Keep-Alive':' timeout=5, max=500',
+                    'Keep-Alive':' timeout=5, max=500',
 
-                  'Expires':new Date(),
+                    'Expires':new Date(),
 
-                  'Server': 'Node Server',
+                    'Server': 'Node Server',
 
-                  'Developed-By':'Pounze It-Solution Pvt Limited',
+                    'Developed-By':'Pounze It-Solution Pvt Limited',
 
-                  'Pragma': 'public,max-age=31536000'
+                    'Pragma': 'public,max-age=31536000'
 
-                });
+                  });
+                }
+                
 
 
 
@@ -1417,21 +1501,25 @@ haste.fn = Library.prototype =
 
         {
 
-          hasteObj.response.writeHead(500,{
+          if(!hasteObj.response.headersSent)
+          {
+            hasteObj.response.writeHead(500,{
 
-            'Cache-Control':'public,max-age=31536000',
+              'Cache-Control':'public,max-age=31536000',
 
-            'Keep-Alive':' timeout=5, max=500',
+              'Keep-Alive':' timeout=5, max=500',
 
-            'Expires':new Date(),
+              'Expires':new Date(),
 
-            'Server': 'Node Server',
+              'Server': 'Node Server',
 
-            'Developed-By':'Pounze It-Solution Pvt Limited',
+              'Developed-By':'Pounze It-Solution Pvt Limited',
 
-            'Pragma': 'public,max-age=31536000'
+              'Pragma': 'public,max-age=31536000'
 
-          });
+            });
+          }
+          
 
 
 
@@ -1596,22 +1684,25 @@ haste.fn = Library.prototype =
             catch(e)
 
             {
+                if(!hasteObj.response.headersSent)
+                {
+                  hasteObj.response.writeHead(500,{
 
-                hasteObj.response.writeHead(500,{
+                    'Cache-Control':'public,max-age=31536000',
 
-                  'Cache-Control':'public,max-age=31536000',
+                    'Keep-Alive':' timeout=5, max=500',
 
-                  'Keep-Alive':' timeout=5, max=500',
+                    'Expires':new Date(),
 
-                  'Expires':new Date(),
+                    'Server': 'Node Server',
 
-                  'Server': 'Node Server',
+                    'Developed-By':'Pounze It-Solution Pvt Limited',
 
-                  'Developed-By':'Pounze It-Solution Pvt Limited',
+                    'Pragma': 'public,max-age=31536000'
 
-                  'Pragma': 'public,max-age=31536000'
-
-                });
+                  });
+                }
+                
 
 
 
@@ -1633,21 +1724,25 @@ haste.fn = Library.prototype =
 
       {
 
-        hasteObj.response.writeHead(500,{
+        if(!hasteObj.response.headersSent)
+        {
+          hasteObj.response.writeHead(500,{
 
-          'Cache-Control':'public,max-age=31536000',
+            'Cache-Control':'public,max-age=31536000',
 
-          'Keep-Alive':' timeout=5, max=500',
+            'Keep-Alive':' timeout=5, max=500',
 
-          'Expires':new Date(),
+            'Expires':new Date(),
 
-          'Server': 'Node Server',
+            'Server': 'Node Server',
 
-          'Developed-By':'Pounze It-Solution Pvt Limited',
+            'Developed-By':'Pounze It-Solution Pvt Limited',
 
-          'Pragma': 'public,max-age=31536000'
+            'Pragma': 'public,max-age=31536000'
 
-        });
+          });
+        }
+        
 
 
 
@@ -1805,6 +1900,14 @@ haste.fn = Library.prototype =
         delete this.input;
 
         delete this;
+
+        delete this.input;
+
+        delete this.request;
+
+        delete this.response;
+
+        delete this.cookieStatus;
 
     },
 
@@ -2072,24 +2175,27 @@ function sendAuthorization(msg,res)
     try
 
     {
+        if(!hasteObj.response.headersSent)
+        {
+          hasteObj.response.writeHead(401,{
 
-        hasteObj.response.writeHead(401,{
+            'Cache-Control':'public,max-age=31536000',
 
-          'Cache-Control':'public,max-age=31536000',
+            'Keep-Alive':' timeout=5, max=500',
 
-          'Keep-Alive':' timeout=5, max=500',
+            'Expires':new Date(),
 
-          'Expires':new Date(),
+            'Server': 'Node Server',
 
-          'Server': 'Node Server',
+            'Developed-By':'Pounze It-Solution Pvt Limited',
 
-          'Developed-By':'Pounze It-Solution Pvt Limited',
+            'Pragma': 'public,max-age=31536000',
 
-          'Pragma': 'public,max-age=31536000',
+            'WWW-Authenticate':'Basic realm="'+msg+'"'
 
-          'WWW-Authenticate':'Basic realm="'+msg+'"'
-
-        });
+          });
+        }
+        
 
 
 
@@ -2256,6 +2362,8 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
                 if(!hasteObj.cookieStatus)
 
                 {
+                  if(!hasteObj.response.headersSent)
+                  {
                     hasteObj.response.writeHead(200,{
 
                       'Content-Length':data.length,
@@ -2275,11 +2383,15 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
                       'Content-Type':'text/html; charset=UTF-8'
 
                     });
+                  }
+                    
 
                 }
 
                 else
                 {
+                  if(!hasteObj.response.headersSent)
+                  {
                     hasteObj.response.writeHead(200,{
 
                       'Content-Length':data.length,
@@ -2301,6 +2413,8 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
                       "Set-Cookie":hasteObj.cookieStatus
 
                     });
+                  }
+                    
 
                 }
 
@@ -2335,21 +2449,25 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
 
         {
 
-         hasteObj.response.writeHead(404,{
+          if(!hasteObj.response.headersSent)
+          {
+            hasteObj.response.writeHead(404,{
 
-              'Cache-Control':'public,max-age=31536000',
+                'Cache-Control':'public,max-age=31536000',
 
-              'Keep-Alive':' timeout=5, max=500',
+                'Keep-Alive':' timeout=5, max=500',
 
-              'Expires':new Date(),
+                'Expires':new Date(),
 
-              'Server': 'Node Server',
+                'Server': 'Node Server',
 
-              'Developed-By':'Pounze It-Solution Pvt Limited',
+                'Developed-By':'Pounze It-Solution Pvt Limited',
 
-              'Pragma': 'public,max-age=31536000'
+                'Pragma': 'public,max-age=31536000'
 
-         });
+           });
+          }
+         
 
           var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
 
@@ -2372,8 +2490,9 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
     catch(e)
 
     {
-
-        hasteObj.response.writeHead(500,{
+        if(!hasteObj.response.headersSent)
+        {
+          hasteObj.response.writeHead(500,{
 
           'Cache-Control':'public,max-age=31536000',
 
@@ -2388,6 +2507,8 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
           'Pragma': 'public,max-age=31536000'
 
         });
+        }
+        
 
 
 
@@ -3713,6 +3834,7 @@ let session = {
               sessionObj[sessionCookie[i][1]] = null;
               delete sessionObj[sessionCookie[i][1]];
               hasteObj.response.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
+              
               return true;
             }
             else
@@ -3794,7 +3916,7 @@ let session = {
           }
         }
       }
-    },240000);
+    },960000);
   }
 };
 
