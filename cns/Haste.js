@@ -1616,6 +1616,7 @@ haste.fn = Library.prototype =
 
       hasteObj.globalObject[this.path]['regex'] = hasteObj.globalObject[this.path]['uri'];
 
+
       for(regex in hasteObj.globalObject[this.path]['regexExp'])
       {
         hasteObj.globalObject[this.path]['regex'] = hasteObj.globalObject[this.path]['regex'].replace(regex,hasteObj.globalObject[this.path]['regexExp'][regex]);
@@ -3640,15 +3641,17 @@ let session = {
       {
         // creating session new id
 
-        session.currentSession = makeid();
-
-        // if object is undefined then creating new object
-
-        if(sessionObj[session.currentSession] == undefined)
+        if(session.currentSession == '')
         {
-          sessionObj[session.currentSession] = {};
-        }
+          session.currentSession = makeid();
 
+          // if object is undefined then creating new object
+
+          if(sessionObj[session.currentSession] == undefined)
+          {
+            sessionObj[session.currentSession] = {};
+          }
+        }
         // setting value to the object
         sessionObj[session.currentSession][key] = value;
         sessionObj[session.currentSession]['time'] = new Date();
