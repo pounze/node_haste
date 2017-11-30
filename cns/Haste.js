@@ -748,7 +748,7 @@ haste.fn = Library.prototype =
         Cortex Concept for accessing apis more directly and easily
       */
 
-      if(requestUri == '/cortex' && requestMethod == 'POST')
+      if(requestMethod == 'POST')
       {
         haste.fn.parsePost(hasteObj.request,function(data)
         {
@@ -794,7 +794,7 @@ haste.fn = Library.prototype =
 
             if(!hasteObj.response.headersSent)
             {
-              hasteObj.response.writeHead(500,{
+              hasteObj.response.writeHead(404,{
 
                 'Cache-Control':'public,max-age=31536000',
 
@@ -814,7 +814,7 @@ haste.fn = Library.prototype =
 
 
 
-            var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
+            var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
 
             readerStream.pipe(res);
 
@@ -2812,7 +2812,7 @@ function RemoteRequest(params,callback)
 
         // on data event is fired call back is append into data variable
 
-        hasteObj.response.on('data', function(chunk)
+        res.on('data', function(chunk)
 
         {
 
@@ -2822,7 +2822,7 @@ function RemoteRequest(params,callback)
 
         // after ending the request
 
-        hasteObj.response.on('end',function()
+        res.on('end',function()
 
         {
 
@@ -2836,7 +2836,7 @@ function RemoteRequest(params,callback)
 
 
 
-      hasteObj.request.on('error',function(e)
+      req.on('error',function(e)
 
       {
 
@@ -2848,9 +2848,9 @@ function RemoteRequest(params,callback)
 
       // write data to request body
 
-      hasteObj.request.write(JSON.stringify(postData));
+      req.write(JSON.stringify(postData));
 
-      hasteObj.request.end();
+      req.end();
 
     }
 
@@ -2878,7 +2878,7 @@ function RemoteRequest(params,callback)
 
         // on data event is fired call back is append into data variable
 
-        hasteObj.response.on('data', function(chunk)
+        res.on('data', function(chunk)
 
         {
 
@@ -2888,7 +2888,7 @@ function RemoteRequest(params,callback)
 
         // after ending the request
 
-        hasteObj.response.on('end',function()
+        res.on('end',function()
 
         {
 
@@ -2902,7 +2902,7 @@ function RemoteRequest(params,callback)
 
 
 
-      hasteObj.request.on('error',function(e)
+      req.on('error',function(e)
 
       {
 
@@ -2916,9 +2916,9 @@ function RemoteRequest(params,callback)
 
 
 
-      hasteObj.request.write(JSON.stringify(postData));
+      req.write(JSON.stringify(postData));
 
-      hasteObj.request.end();
+      req.end();
 
 
 
