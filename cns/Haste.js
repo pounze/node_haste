@@ -44,6 +44,8 @@ const config = require(__dirname+'/config.js');
 
 const sessionObj = require(__dirname+'/session.js');
 
+const stream = require('stream');
+
 
 
 /*
@@ -2248,9 +2250,15 @@ function checkAuth(req)
 
 
 
-function renderPage(find,replace,req,res,page,code = null,headers = null)
+function renderPage(find,replace,req,res,page,code = null,headers = null,compression = null)
 
 {
+  // zip compression
+
+  if(compression != null)
+  {
+    hasteObj.response.setHeader('content-encoding','gzip');
+  }
 
     /*
 
@@ -2428,9 +2436,19 @@ function renderPage(find,replace,req,res,page,code = null,headers = null)
 
             }
 
-            
-
-            hasteObj.response.end(data);
+            if(compression != null)
+            {
+              var zlib = require('zlib');
+              zlib.gzip(data, function (_, result)
+              { 
+                hasteObj.response.write(result);
+                hasteObj.response.end();                 
+              });
+            }
+            else
+            {
+              hasteObj.response.end(data);
+            }
 
           }
 
@@ -3925,324 +3943,6 @@ let session = {
 
 session.clearSession();
 
-function regexParser(matcher,regex,output)
-{
-  var regularExp = '';
-  /*
-  start iterating in matcher object
-  */
-  for(var key in regex)
-  {
-  /*
-  If the matcher[key] is an array
-  */
-    if(Array.isArray(matcher[key]))
-    {
-      /*
-      initialize an array of output object
-      */
-      output[key] = [];
-      for(var counter in matcher[key])
-      {
-        /*
-        iterating through matcher[key] for nester object
-        and creating new object into output[key][counter]
-        */
-        output[key][counter] = {};
-        for(var subKey in regex[key][counter])
-        {
-          if(matcher[key][counter][subKey] != null && typeof(matcher[key][counter][subKey]) != 'undefined')
-          {
-            /*
-            Iterating through matcher[key][counter] to navigate through array
-            */
-            if(typeof(matcher[key][counter][subKey]) != regex[key][0][subKey]['datatype'])
-            {
-              /*
-              if key value does not match the data type then it checks for default value existence else through an error
-              */
-              if(typeof(regex[key][0][subKey]['default']) != 'undefined')
-              {
-                output[key][counter][subKey] = regex[key][0][subKey]['default'];
-              }
-              else
-              {
-                matcher = null;
-                regex = null;
-                delete matcher;
-                delete regex;
-                return {node:key,msg:'Failed to match',status:false};
-              }
-
-              /*
-                Regular Expression Match
-              */
-
-              if(typeof(regex[key][0][subKey]['regex']) != 'undefined')
-              {
-                // console.error(regex[key][0][subKey]['regex']);
-                regularExp = new RegExp(regex[key][0][subKey]['regex'],"g");
-                if(!matcher[key][counter][subKey].match(regularExp))
-                {
-                  matcher = null;
-                  regex = null;
-                  delete matcher;
-                  delete regex;
-                  return {node:key,msg:'Does not match the regular expression',status:false};
-                }
-              }
-
-              /*
-                Check for empty
-              */
-
-              if(typeof(regex[key][0][subKey]['empty']) != 'undefined')
-              {
-                if(matcher[key][counter][subKey] == '')
-                {
-                  matcher = null;
-                  regex = null;
-                  delete matcher;
-                  delete regex;
-                  return {node:key,msg:'Cannot be empty',status:false};
-                }
-              }
-
-              /*
-                remove elements
-              */
-
-              if(typeof(regex[key][0][subKey]['remove']) != 'undefined' && regex[key][0][subKey]['remove'] == true)
-              {
-                matcher[key][counter][subKey] = null;
-                delete matcher[key][counter][subKey];
-              }
-            }
-            else
-            {
-              /*
-              else copying data and array to output object
-              */
-              output[key][counter][subKey] = matcher[key][counter][subKey];
-
-              /*
-                Regular Expression Match
-              */
-
-              if(typeof(regex[key][0][subKey]['regex']) != 'undefined')
-              {
-                // console.error(regex[key][0][subKey]['regex']);
-                regularExp = new RegExp(regex[key][0][subKey]['regex'],"g");
-                if(!matcher[key][counter][subKey].match(regularExp))
-                {
-                  matcher = null;
-                  regex = null;
-                  delete matcher;
-                  delete regex;
-                  return {node:key,msg:'Does not match the regular expression',status:false};
-                }
-              }
-
-              /*
-                Check for empty
-              */
-
-              if(typeof(regex[key][0][subKey]['empty']) != 'undefined')
-              {
-                if(matcher[key][counter][subKey] == '')
-                {
-                  matcher = null;
-                  regex = null;
-                  delete matcher;
-                  delete regex;
-                  return {node:key,msg:'Cannot be empty',status:false};
-                }
-              }
-
-              /*
-                remove elements
-              */
-
-              if(typeof(regex[key][0][subKey]['remove']) != 'undefined' && regex[key][0][subKey]['remove'] == true)
-              {
-                matcher[key][counter][subKey] = null;
-                delete matcher[key][counter][subKey];
-              }
-            }
-          }
-          else
-          {
-            /*
-            if key value does not match the data type then it checks for default value existence else through an error
-            */
-            if(typeof(regex[key][0][subKey]['default']) != 'undefined')
-            {
-              output[key][counter][subKey] = regex[key][0][subKey]['default'];
-            }
-            else
-            {
-              matcher = null;
-              regex = null;
-              delete matcher;
-              delete regex;
-              return {node:key,msg:'cannot be null',status:false};
-            }
-          }
-        }
-      }
-    }
-    else
-    {
-      if(matcher[key] != null && typeof(matcher[key]) != 'undefined')
-      {
-        /*
-        If it not found an array then datatype is matched directly if matched the copying data to output object
-        else throw an error
-        */
-
-        if(typeof(matcher[key]) != regex[key]['datatype'])
-        {
-          /*
-          it checks if any default value is stored
-          */
-          if(typeof(regex[key]['default']) != 'undefined')
-          {
-            output[key] = regex[key]['default'];
-          }
-          else
-          {
-            matcher = null;
-            regex = null;
-            delete matcher;
-            delete regex;
-            return {node:key,msg:'Failed to match',status:false};
-          }
-
-          /*
-            Regular Expression Match
-          */
-
-          if(typeof(regex[key]['regex']) != 'undefined')
-          {
-
-            regularExp = new RegExp(regex[key]['regex'],"g");
-            if(!matcher[key].match(regularExp))
-            {
-              matcher = null;
-              regex = null;
-              delete matcher;
-              delete regex;
-              return {node:key,msg:'Does not match the regular expression',status:false};
-            }
-          }
-
-          /*
-            Check for empty
-          */
-
-          if(typeof(regex[key]['empty']) != 'undefined')
-          {
-            if(matcher[key] == '')
-            {
-              matcher = null;
-              regex = null;
-              delete matcher;
-              delete regex;
-              return {node:key,msg:'Cannot be empty',status:false};
-            }
-          }
-
-          /*
-            remove elements
-          */
-
-          if(typeof(regex[key]['remove']) != 'undefined' && regex[key]['remove'] == true)
-          {
-            matcher[key] = null;
-            delete matcher[key];
-          }
-        }
-        else
-        {
-          output[key] = matcher[key];
-
-          /*
-            Regular Expression Match
-          */
-
-          if(typeof(regex[key]['regex']) != 'undefined')
-          {
-
-            regularExp = new RegExp(regex[key]['regex'],"g");
-
-            if(!matcher[key].match(regularExp))
-            {
-              matcher = null;
-              regex = null;
-              delete matcher;
-              delete regex;
-              return {node:key,msg:'Does not match the regular expression',status:false};
-            }
-          }
-
-          /*
-            Check for empty
-          */
-
-          if(typeof(regex[key]['empty']) != 'undefined')
-          {
-            if(matcher[key] == '')
-            {
-              matcher = null;
-              regex = null;
-              delete matcher;
-              delete regex;
-              return {node:key,msg:'Cannot be empty',status:false};
-            }
-          }
-
-          /*
-            remove elements
-          */
-
-          if(typeof(regex[key]['remove']) != 'undefined' && regex[key]['remove'] == true)
-          {
-            matcher[key] = null;
-            delete matcher[key];
-          }
-        }
-      }
-      else
-      {
-        /*
-        it checks if any default value is stored
-        */
-        if(typeof(regex[key]['default']) != 'undefined')
-        {
-          output[key] = regex[key]['default'];
-        }
-        else
-        {
-          matcher = null;
-          regex = null;
-          delete matcher;
-          delete regex;
-          return {node:key,msg:'cannot be null',status:false};
-        }
-      }
-      if(regex.hasOwnProperty(key) && typeof(regex[key]) == 'object' && typeof(matcher[key]) != 'undefined')
-      {
-        regexParser(matcher[key], regex[key],output[key]);
-      }
-    }
-  }
-  matcher = null;
-  regex = null;
-  delete matcher;
-  delete regex;
-  return {node:output,msg:'All nodes matched',status:true}
-}
-
 /*
   create unique session id
 */
@@ -4263,6 +3963,41 @@ function makeid()
 
 
 
+/*
+  compression library
+*/
+
+var compress = {
+  gzip:function(data)
+  {
+    var zlib = require('zlib');
+    hasteObj.response.setHeader('content-encoding','gzip');
+
+    zlib.gzip(data, function (_, result)
+    { 
+      hasteObj.response.end(result);              
+    });
+  },
+  deflate:function(data)
+  {
+    var zlib = require('zlib');
+    hasteObj.response.setHeader('content-encoding','deflate');
+    zlib.deflate(data, function (_, result)
+    { 
+      hasteObj.response.end(result);                 
+    });
+  },
+  DeflateRaw:function(data)
+  {
+    var zlib = require('zlib');
+    hasteObj.response.setHeader('content-encoding','deflate');
+    zlib.deflateRaw(data, function (_, result)
+    { 
+      hasteObj.response.end(result);                 
+    });
+  }
+}; 
+
 
 // methods and objects exported
 
@@ -4271,8 +4006,6 @@ exports.__init__ = haste;
 exports.renderPage = renderPage;
 
 exports.mySQL = mySQL;
-
-exports.regexParser = regexParser;
 
 exports.fileCopy = fileCopy;
 
@@ -4299,6 +4032,8 @@ exports.setCookies = setCookies;
 exports.getUserAgent = getUserAgent;
 
 exports.session = session;
+
+exports.compress = compress;
 
 //=====================================================================================================================================
 
