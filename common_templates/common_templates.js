@@ -7,12 +7,10 @@ function main(req,res,input)
 	var name = session.get('fullName');
 	var	designation = session.get('designation');
 
-	var find = ['[@header]','[@name]','[@designation]'];
-	var replace = [header,name,designation];
-
 	return {
-		find:find,
-		replace:replace
+		'[@header]':header,
+		'[@name]':name,
+		'[@designation]':designation
 	};
 }
 
