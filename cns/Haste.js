@@ -2250,7 +2250,7 @@ function checkAuth(req)
 
 
 
-function renderPage(find,replace,req,res,page,code = null,headers = null,compression = null)
+function renderPage(Render,req,res,page,code = null,headers = null,compression = null)
 
 {
   // zip compression
@@ -2268,7 +2268,7 @@ function renderPage(find,replace,req,res,page,code = null,headers = null,compres
 
 
 
-  if(Array.isArray(find) && Array.isArray(replace))
+  if(typeof(Render) == 'object' && !Array.isArray(Render))
 
   {
 
@@ -2339,7 +2339,6 @@ function renderPage(find,replace,req,res,page,code = null,headers = null,compres
 
 
         readerStream.on('end',function()
-
         {
 
 
@@ -2350,21 +2349,13 @@ function renderPage(find,replace,req,res,page,code = null,headers = null,compres
 
           */
 
-          var findLen = find.length;
+          for(var key in Render)
+          { 
+            regexData = new RegExp(key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'),"g");
+            data = data.replace(regexData, Render[key]);
+          }
 
-          var replaceLength = replace.length;
-
-          if(findLen == replaceLength)
-
-          {
-
-            for(var i=0; i<findLen; i++)
-            { 
-              regexData = new RegExp(find[i].replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'),"g");
-              data = data.replace(regexData, replace[i]);
-            }
-
-            if(headers == null)
+          if(headers == null)
 
             {
 
@@ -2428,11 +2419,9 @@ function renderPage(find,replace,req,res,page,code = null,headers = null,compres
                 }
 
             }
-
             else
-
             {
-                hasteObj.response.writeHead(code,headers);
+              hasteObj.response.writeHead(code,headers);
 
             }
 
@@ -2449,16 +2438,6 @@ function renderPage(find,replace,req,res,page,code = null,headers = null,compres
             {
               hasteObj.response.end(data);
             }
-
-          }
-
-          else
-
-          {
-
-            console.error('find and replace array length must be same');
-
-          }
 
         });
 
@@ -2545,7 +2524,7 @@ function renderPage(find,replace,req,res,page,code = null,headers = null,compres
 
   {
 
-    console.error('find and replace must be array');
+    console.error('Render variable must be an object');
 
   }
 
