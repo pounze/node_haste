@@ -560,7 +560,7 @@ haste.fn = Library.prototype =
 
     },
 
-    handleRequest:function(req,res)
+    handleRequest: async function(req,res)
     {
         hasteObj.request = req;
         hasteObj.response = res;
@@ -750,12 +750,14 @@ haste.fn = Library.prototype =
         Cortex Concept for accessing apis more directly and easily
       */
 
-      if(requestMethod == 'POST')
-      {
-        haste.fn.parsePost(hasteObj.request,function(data)
-        {
 
-          hasteObj.input['requestData'] = data;
+      if(requestMethod == 'POST' && requestUri == '/cortex')
+      {
+        var parseCb = await haste.fn.parsePost(hasteObj.request);
+
+        if(parseCb.status)
+        {
+          hasteObj.input['requestData'] = parseCb.data;
 
           try
           {
@@ -768,24 +770,15 @@ haste.fn = Library.prototype =
 
            var stat = fs.statSync('./controllers/'+tempMapping+'/'+hasteObj.input['requestData']['cortex']+'.js');
 
-            
-
             if(stat.isFile())
-
             {
-
               var controller = require('../controllers/'+tempMapping+'/'+hasteObj.input['requestData']['cortex']+'.js');
 
               controller.main(req,res,hasteObj.input);
-
             }
-
             else
-
             {
-
               console.error('Controller must me a javascript file'); 
-
             }
 
           }
@@ -824,11 +817,30 @@ haste.fn = Library.prototype =
             return false;
 
           }
-        });
+        }
+        else
+        {
+          hasteObj.response.writeHead(500,{
+
+            'Cache-Control':'public,max-age=31536000',
+
+            'Keep-Alive':' timeout=5, max=500',
+
+            'Expires':new Date(),
+
+            'Server': 'Node Server',
+
+            'Developed-By':'Pounze It-Solution Pvt Limited',
+
+            'Pragma': 'public,max-age=31536000'
+
+          });
+          hasteObj.response.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
+          return; 
+        }
 
         return false;
       }
-
 
 
       /*
@@ -860,7 +872,7 @@ haste.fn = Library.prototype =
         {
           /*
 
-            
+            Iterating through object in to match uri and parse request accordingly            
 
           */
 
@@ -890,29 +902,68 @@ haste.fn = Library.prototype =
 
                 case "GET":
 
-                  haste.fn.parseGet(hasteObj.request,function(data)
+                  var parseCb = await haste.fn.parseGet(hasteObj.request);
 
+                  if(parseCb.status)
                   {
+                    hasteObj.input['requestData'] = parseCb.data;
 
-                    hasteObj.input['requestData'] = data;
+                    haste.fn.modules(hasteObj.request,hasteObj.response,hasteObj,obj);
+                  }
+                  else
+                  {
+                    hasteObj.response.writeHead(500,{
 
-                    haste.fn.modules(hasteObj.request,hasteObj.response,hasteObj);
+                      'Cache-Control':'public,max-age=31536000',
 
-                  });
+                      'Keep-Alive':' timeout=5, max=500',
+
+                      'Expires':new Date(),
+
+                      'Server': 'Node Server',
+
+                      'Developed-By':'Pounze It-Solution Pvt Limited',
+
+                      'Pragma': 'public,max-age=31536000'
+
+                    });
+                    hasteObj.response.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
+                    return; 
+                  }
 
                 break;
 
                 case "POST":
 
-                  haste.fn.parsePost(hasteObj.request,function(data)
+                  var parseCb = await haste.fn.parsePost(hasteObj.request);
 
+                  if(parseCb.status)
                   {
+                    hasteObj.input['requestData'] = parseCb.data;
 
-                    hasteObj.input['requestData'] = data;
+                    haste.fn.modules(hasteObj.request,hasteObj.response,hasteObj,obj);
+                  }
+                  else
+                  {
+                    hasteObj.response.writeHead(500,{
 
-                    haste.fn.modules(hasteObj.request,hasteObj.response,hasteObj);
+                      'Cache-Control':'public,max-age=31536000',
 
-                  });
+                      'Keep-Alive':' timeout=5, max=500',
+
+                      'Expires':new Date(),
+
+                      'Server': 'Node Server',
+
+                      'Developed-By':'Pounze It-Solution Pvt Limited',
+
+                      'Pragma': 'public,max-age=31536000'
+
+                    });
+
+                    hasteObj.response.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
+                    return;
+                  }
 
                 break;
 
@@ -1217,7 +1268,7 @@ haste.fn = Library.prototype =
 
     },
 
-    modules:function(req,res,hasteObj)
+    modules:function(req,res,hasteObj,obj)
 
     {
 
@@ -1367,7 +1418,7 @@ haste.fn = Library.prototype =
 
             if(success == middlewareLen)
             {
-              haste.fn.executeMethod(req,res,hasteObj);
+              haste.fn.executeMethod(req,res,hasteObj,obj);
             }
         }
 
@@ -1403,7 +1454,7 @@ haste.fn = Library.prototype =
 
                 hasteObj.input[hasteObj.globalObject[obj]["middleware"]] = middlewareCallbacks[1];
 
-                haste.fn.executeMethod(req,res,hasteObj);
+                haste.fn.executeMethod(req,res,hasteObj,obj);
 
               }
 
@@ -1433,13 +1484,13 @@ haste.fn = Library.prototype =
 
       {
 
-        haste.fn.executeMethod(req,res,hasteObj);
+        haste.fn.executeMethod(req,res,hasteObj,obj);
 
       }    
 
     },
 
-    executeMethod:function(req,res,hasteObj)
+    executeMethod:function(req,res,hasteObj,obj)
 
     {
 
@@ -1772,24 +1823,25 @@ haste.fn = Library.prototype =
 
     },
 
-    parseGet:function(req,callback)
+    parseGet: async function(req)
 
     {
 
         // parse get request
+        return new Promise((resolve,reject)=>{
+          var url_parsed = url_module.parse(hasteObj.request.url,true);
 
-        var url_parsed = url_module.parse(hasteObj.request.url,true);
-
-        callback(url_parsed['query']);
+          resolve({status:true,data:url_parsed['query']});  
+        });
+        
 
     },
 
-    parsePost:function(req,callback)
+    parsePost: async function(req)
 
     {
 
-
-
+      return new Promise((resolve,reject)=>{
         if(typeof(hasteObj.request.headers['content-type']) != 'undefined')
 
         {
@@ -1822,7 +1874,7 @@ haste.fn = Library.prototype =
 
                 };
 
-                callback(bindkey);
+                resolve({status:true,data:bindkey});
 
               });
 
@@ -1831,7 +1883,7 @@ haste.fn = Library.prototype =
             catch(e)
 
             {
-
+              resolve({status:false});
               console.error('Please install multiparty {npm install multiparty}');
 
             }
@@ -1859,16 +1911,21 @@ haste.fn = Library.prototype =
               if(hasteObj.request.headers['content-type'] == 'application/json')
 
               {
-
-                callback(JSON.parse(body));
-
+                try
+                {
+                  var jsonData = JSON.parse(body);
+                  resolve({status:true,data:jsonData});
+                }
+                catch(e)
+                {
+                  resolve({status:false});
+                }
               }
 
               else
 
               {
-
-                callback(qs.parse(body));
+                resolve({status:true,data:qs.parse(body)});
 
               }
 
@@ -1877,7 +1934,7 @@ haste.fn = Library.prototype =
           }
 
         }
-
+      });
     },
 
     close:function()
