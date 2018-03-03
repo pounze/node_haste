@@ -9,27 +9,32 @@ app.HttpServer('127.0.0.1',8100,function(server)
 		console.log(callback);
 	});
 
-	var io = require('socket.io').listen(server);
-	io.on('connection', function(socket)
-	{
-		socket.on('message', function(data)
-		{
-			app.webSocket(data,function(data)
-			{
-				socket.emit("callback",{status:true,msg:data});
-			});
-		});
+	// var io = require('socket.io').listen(server);
+	// io.on('connection', function(socket)
+	// {
+	// 	socket.on('message', function(data)
+	// 	{
+	// 		app.webSocket(data,function(data)
+	// 		{
+	// 			socket.emit("callback",{status:true,msg:data});
+	// 		});
+	// 	});
 
-		socket.on('disconnect',function(msg)
-	    {
-	    	console.log("disconnected");
-	    });
+	// 	socket.on('disconnect',function(msg)
+	//     {
+	//     	console.log("disconnected");
+	//     });
 
-	    socket.on('end',function()
-	    {
-	    	console.log('Server closed');
-	    });
-	});
+	//     socket.on('end',function()
+	//     {
+	//     	console.log('Server closed');
+	//     });
+	// });
+});
+
+app.DefaultMethod(function(req,res)
+{
+	res.setHeader("Name","Sudeep Dasgupta");
 });
 
 app.AllowDirectories(['UserView/']);
