@@ -92,6 +92,8 @@ var Library = function(params)
 
   this.cookieStatus = false;
 
+  this.defaultMethod;
+
   return this;
 
 };
@@ -477,6 +479,10 @@ haste.fn = Library.prototype =
       }
 
     },
+    DefaultMethod:function(callback)
+    {
+      defaultMethod = callback;
+    },
     getIpAddress:function(req,res)
 
     {
@@ -562,6 +568,10 @@ haste.fn = Library.prototype =
 
     handleRequest: async function(req,res)
     {
+      if(typeof(defaultMethod) != 'undefined')
+      {
+        defaultMethod(req,res);
+      }
         hasteObj.request = req;
         hasteObj.response = res;
         session.currentSession = '';
