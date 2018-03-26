@@ -94,6 +94,8 @@ var Library = function(params)
 
   this.defaultMethod;
 
+  this.maintainanceStat = undefined;
+
   return this;
 
 };
@@ -542,19 +544,9 @@ haste.fn = Library.prototype =
             if(!hasteObj.response.headersSent)
             {
               hasteObj.response.writeHead(404,{
-
-                'Cache-Control':'public,max-age=31536000',
-
                 'Keep-Alive':' timeout=5, max=500',
-
-                'Expires':new Date(),
-
                 'Server': 'Node Server',
-
-                'Developed-By':'Pounze It-Solution Pvt Limited',
-
-                'Pragma': 'public,max-age=31536000'
-
+                'Developed-By':'Pounze It-Solution Pvt Limited'
               });
             }
 
@@ -608,28 +600,19 @@ haste.fn = Library.prototype =
         
 
         if(config.server.showHeapUsuage)
-
         {
-
-            console.error('Heap used '+heapUsuage['heapUsed'] +' | Heap total size: '+heapUsuage['heapTotal']);
-
+          console.error('Heap used '+heapUsuage['heapUsed'] +' | Heap total size: '+heapUsuage['heapTotal']);
         }
 
         
 
         if(heapUsuage['heapUsed'] > heapUsuage['heapTotal'])
-
         {
-
-            data = {
-
-                status:false,
-
-                msg:'Server is to busy'
-
-            };
-
-            hasteObj.response.end(JSON.stringify(data));
+          data = {
+            status:false,
+            msg:'Server is to busy'
+          };
+          hasteObj.response.end(JSON.stringify(data));
 
         }
 
@@ -643,11 +626,8 @@ haste.fn = Library.prototype =
 
         hasteObj.request.on('error',function()
         {
-
-            console.error('Error in server');
-
-            return false;
-
+          console.error('Error in server');
+          return false;
         });
 
 
@@ -674,42 +654,43 @@ haste.fn = Library.prototype =
 
         */
 
-
-
         if(config.server.maintainance)
-
         {
+          if(!hasteObj.response.headersSent)
+          {
+            hasteObj.response.setHeader("Keep-Alive","timeout=5, max=500");
+            hasteObj.response.setHeader("Server","Node Server");
+            hasteObj.response.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+            hasteObj.response.setHeader("Content-Type","text/html");
+          }
+          
+          var stat = fs.statSync('./error_files/'+config.errorPages.MaintainancePage);
 
-            if(!hasteObj.response.headersSent)
+          var modifiedDate = new Date(stat.mtimeMs).getTime();
+
+          if(typeof(hasteObj.request.headers['if-modified-since']) == 'undefined')
+          {
+            hasteObj.response.setHeader('Last-Modified',modifiedDate);
+            hasteObj.response.statusCode = 200;
+          }
+          else
+          {
+            hasteObj.response.setHeader('Last-Modified',modifiedDate);
+            if(hasteObj.request.headers['if-modified-since'] < modifiedDate)
             {
-              hasteObj.response.writeHead(303,{
-
-                'Cache-Control':'public,max-age=31536000',
-
-                'Keep-Alive':' timeout=5, max=500',
-
-                'Expires':new Date(),
-
-                'Server': 'Node Server',
-
-                'Developed-By':'Pounze It-Solution Pvt Limited',
-
-                'Pragma': 'public,max-age=31536000'
-
-              });
+              hasteObj.response.statusCode = 200;
             }
-            
+            else
+            {
+              hasteObj.response.statusCode = 304;
+            }
+          }
 
+          var readerStream = fs.createReadStream('./error_files/'+config.errorPages.MaintainancePage);
 
+          readerStream.pipe(hasteObj.response);
 
-            var readerStream = fs.createReadStream('./error_files/'+config.errorPages.MaintainancePage);
-
-            readerStream.pipe(hasteObj.response);
-
-            
-
-            return false;
-
+          return false;
         }
 
         /*
@@ -800,19 +781,11 @@ haste.fn = Library.prototype =
             if(!hasteObj.response.headersSent)
             {
               hasteObj.response.writeHead(404,{
-
-                'Cache-Control':'public,max-age=31536000',
-
                 'Keep-Alive':' timeout=5, max=500',
-
-                'Expires':new Date(),
-
                 'Server': 'Node Server',
-
                 'Developed-By':'Pounze It-Solution Pvt Limited',
-
+                'Cache-Control':'public,max-age=31536000',
                 'Pragma': 'public,max-age=31536000'
-
               });
             }
             
@@ -831,19 +804,11 @@ haste.fn = Library.prototype =
         else
         {
           hasteObj.response.writeHead(500,{
-
-            'Cache-Control':'public,max-age=31536000',
-
             'Keep-Alive':' timeout=5, max=500',
-
-            'Expires':new Date(),
-
             'Server': 'Node Server',
-
             'Developed-By':'Pounze It-Solution Pvt Limited',
-
+            'Cache-Control':'public,max-age=31536000',
             'Pragma': 'public,max-age=31536000'
-
           });
           hasteObj.response.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
           return; 
@@ -897,17 +862,13 @@ haste.fn = Library.prototype =
               let matchedArrLen = matchedArr.length;
 
               for(let mat=1;mat<matchedArrLen;mat++)
-
               {
-
                 hasteObj.input[matchedArr[mat]] = requestUriArr[mat];
-
               }
 
 
 
               switch(requestMethod)
-
               {
 
                 case "GET":
@@ -923,20 +884,13 @@ haste.fn = Library.prototype =
                   else
                   {
                     hasteObj.response.writeHead(500,{
-
-                      'Cache-Control':'public,max-age=31536000',
-
                       'Keep-Alive':' timeout=5, max=500',
-
-                      'Expires':new Date(),
-
                       'Server': 'Node Server',
-
                       'Developed-By':'Pounze It-Solution Pvt Limited',
-
+                      'Cache-Control':'public,max-age=31536000',
                       'Pragma': 'public,max-age=31536000'
-
                     });
+
                     hasteObj.response.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
                     return; 
                   }
@@ -956,19 +910,11 @@ haste.fn = Library.prototype =
                   else
                   {
                     hasteObj.response.writeHead(500,{
-
-                      'Cache-Control':'public,max-age=31536000',
-
                       'Keep-Alive':' timeout=5, max=500',
-
-                      'Expires':new Date(),
-
                       'Server': 'Node Server',
-
                       'Developed-By':'Pounze It-Solution Pvt Limited',
-
+                      'Cache-Control':'public,max-age=31536000',
                       'Pragma': 'public,max-age=31536000'
-
                     });
 
                     hasteObj.response.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
@@ -1014,19 +960,11 @@ haste.fn = Library.prototype =
             if(!hasteObj.response.headersSent)
             {
               hasteObj.response.writeHead(404,{
-
-                'Cache-Control':'public,max-age=31536000',
-
                 'Keep-Alive':' timeout=5, max=500',
-
-                'Expires':new Date(),
-
                 'Server': 'Node Server',
-
                 'Developed-By':'Pounze It-Solution Pvt Limited',
-
+                'Cache-Control':'public,max-age=31536000',
                 'Pragma': 'public,max-age=31536000'
-
               });
             }
 
@@ -1128,60 +1066,61 @@ haste.fn = Library.prototype =
 
               }
 
+              var stat = fs.statSync('./'+requestUri);
 
-              if(!hasteObj.response.headersSent)
+              if(stat.isFile())
               {
-                hasteObj.response.writeHead(200,{
+                hasteObj.response.setHeader("Keep-Alive","timeout=5, max=500");
+                hasteObj.response.setHeader("Server","Node Server");
+                hasteObj.response.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
 
-                  'Cache-Control':'public,max-age=31536000',
+                var modifiedDate = new Date(stat.mtimeMs).getTime();
 
-                  'Keep-Alive':' timeout=5, max=500',
+                if(typeof(hasteObj.request.headers['if-modified-since']) == 'undefined')
+                {
+                  hasteObj.response.setHeader('Last-Modified',modifiedDate);
+                  hasteObj.response.statusCode = 200;
+                }
+                else
+                {
+                  hasteObj.response.setHeader('Last-Modified',modifiedDate);
+                  if(hasteObj.request.headers['if-modified-since'] < modifiedDate)
+                  {
+                    hasteObj.response.statusCode = 200;
+                  }
+                  else
+                  {
+                    hasteObj.response.statusCode = 304;
+                  }
+                }
 
-                  'Expires':new Date(),
-
-                  'Server': 'Node Server',
-
-                  'Developed-By':'Pounze It-Solution Pvt Limited',
-
-                  'Pragma': 'public,max-age=31536000'
-
-                });
-              }
-              
-
-
-              var statSync = fs.statSync('./'+requestUri);
-
-              if(statSync.isFile())
-              {
                 readerStream = fs.createReadStream('./'+requestUri);
-
-                readerStream.pipe(hasteObj.response);
+                
+                if(config.compression.gzip == false)
+                {
+                  readerStream.pipe(hasteObj.response);
+                }
+                else
+                {
+                  var zlib = require('zlib');
+                  hasteObj.response.setHeader('content-encoding','gzip');
+                  readerStream.pipe(zlib.createGzip()).pipe(hasteObj.response);
+                }
               }
               else
               {
                 if(!hasteObj.response.headersSent)
                 {
                   hasteObj.response.writeHead(404,{
-
-                  'Cache-Control':'public,max-age=31536000',
-
-                  'Keep-Alive':' timeout=5, max=500',
-
-                  'Expires':new Date(),
-
-                  'Server': 'Node Server',
-
-                  'Developed-By':'Pounze It-Solution Pvt Limited',
-
-                  'Pragma': 'public,max-age=31536000'
-
+                    'Keep-Alive':' timeout=5, max=500',
+                    'Server': 'Node Server',
+                    'Developed-By':'Pounze It-Solution Pvt Limited',
+                    'Cache-Control':'public,max-age=31536000',
+                    'Pragma': 'public,max-age=31536000',
+                    'Content-Type':'text/html'
                   });
                 }
                 
-
-
-
                 var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
 
                 readerStream.pipe(hasteObj.response);
@@ -1214,20 +1153,13 @@ haste.fn = Library.prototype =
             if(!hasteObj.response.headersSent)
             {
               hasteObj.response.writeHead(403,{
-
-                'Cache-Control':'public,max-age=31536000',
-
                 'Keep-Alive':' timeout=5, max=500',
-
-                'Expires':new Date(),
-
                 'Server': 'Node Server',
-
                 'Developed-By':'Pounze It-Solution Pvt Limited',
-
-                'Pragma': 'public,max-age=31536000'
-
-                });
+                'Cache-Control':'public,max-age=31536000',
+                'Pragma': 'public,max-age=31536000',
+                'Content-Type':'text/html'
+              });
             }
             
 
@@ -1246,19 +1178,12 @@ haste.fn = Library.prototype =
           if(!hasteObj.response.headersSent)
           {
             hasteObj.response.writeHead(500,{
-
-              'Cache-Control':'public,max-age=31536000',
-
               'Keep-Alive':' timeout=5, max=500',
-
-              'Expires':new Date(),
-
               'Server': 'Node Server',
-
               'Developed-By':'Pounze It-Solution Pvt Limited',
-
-              'Pragma': 'public,max-age=31536000'
-
+              'Cache-Control':'public,max-age=31536000',
+              'Pragma': 'public,max-age=31536000',
+              'Content-Type':'text/html'
             });
           }
           
@@ -1396,19 +1321,12 @@ haste.fn = Library.prototype =
                 if(!hasteObj.response.headersSent)
                 {
                   hasteObj.response.writeHead(500,{
-
-                    'Cache-Control':'public,max-age=31536000',
-
                     'Keep-Alive':' timeout=5, max=500',
-
-                    'Expires':new Date(),
-
                     'Server': 'Node Server',
-
                     'Developed-By':'Pounze It-Solution Pvt Limited',
-
-                    'Pragma': 'public,max-age=31536000'
-
+                    'Cache-Control':'public,max-age=31536000',
+                    'Pragma': 'public,max-age=31536000',
+                    'Content-Type':'text/html'
                   });
                 }
                 
@@ -1510,7 +1428,8 @@ haste.fn = Library.prototype =
 
 
 
-        if string then it is passed to controller
+        if string then it is passed to 
+
 
         else callback is given to method
 
@@ -1567,19 +1486,12 @@ haste.fn = Library.prototype =
           if(!hasteObj.response.headersSent)
           {
             hasteObj.response.writeHead(500,{
-
-              'Cache-Control':'public,max-age=31536000',
-
               'Keep-Alive':' timeout=5, max=500',
-
-              'Expires':new Date(),
-
               'Server': 'Node Server',
-
               'Developed-By':'Pounze It-Solution Pvt Limited',
-
-              'Pragma': 'public,max-age=31536000'
-
+              'Cache-Control':'public,max-age=31536000',
+              'Pragma': 'public,max-age=31536000',
+              'Content-Type':'text/html'
             });
           }
           
@@ -1689,7 +1601,7 @@ haste.fn = Library.prototype =
 
     },
 
-    views:function(file,req,res,data)
+    views:async function(file,req,res,data)
 
     {
 
@@ -1713,57 +1625,65 @@ haste.fn = Library.prototype =
 
             var views = require('../common_templates/common_templates.js');
 
-            var commongData = views.main(req,res,data);
+            var commongData = await views.main(req,res,data);
 
 
 
             try
-
             {
 
-                var stat = fs.statSync('./templates/'+file+'.js');
+              var stat = fs.statSync('./templates/'+file+'.js');
 
+              var modifiedDate = new Date(stat.mtimeMs).getTime();
 
+              if(stat.isFile())
 
-                if(stat.isFile())
+              {
 
+                if(typeof(hasteObj.request.headers['if-modified-since']) == 'undefined')
                 {
-
-                  var views = require('../templates/'+file+'.js');
-
-                  views.main(req,res,data,commongData);
-
+                  hasteObj.response.setHeader('Last-Modified',modifiedDate);
+                  hasteObj.response.statusCode = 200;
                 }
-
                 else
-
                 {
-
-                  console.error('View template page name must be a javascript file');
-
+                  hasteObj.response.setHeader('Last-Modified',modifiedDate);
+                  if(hasteObj.request.headers['if-modified-since'] < modifiedDate)
+                  {
+                    hasteObj.response.statusCode = 200;
+                  }
+                  else
+                  {
+                    hasteObj.response.statusCode = 304;
+                  }
                 }
 
+
+                var views = require('../templates/'+file+'.js');
+
+                views.main(req,res,data,commongData);
+
+              }
+
+              else
+
+              {
+
+                console.error('View template page name must be a javascript file');
+
+              }
             }
-
             catch(e)
-
             {
                 if(!hasteObj.response.headersSent)
                 {
                   hasteObj.response.writeHead(500,{
-
-                    'Cache-Control':'public,max-age=31536000',
-
                     'Keep-Alive':' timeout=5, max=500',
-
-                    'Expires':new Date(),
-
                     'Server': 'Node Server',
-
                     'Developed-By':'Pounze It-Solution Pvt Limited',
-
-                    'Pragma': 'public,max-age=31536000'
-
+                    'Cache-Control':'public,max-age=31536000',
+                    'Pragma': 'public,max-age=31536000',
+                    'Content-Type':'text/html'
                   });
                 }
                 
@@ -1791,19 +1711,12 @@ haste.fn = Library.prototype =
         if(!hasteObj.response.headersSent)
         {
           hasteObj.response.writeHead(500,{
-
-            'Cache-Control':'public,max-age=31536000',
-
             'Keep-Alive':' timeout=5, max=500',
-
-            'Expires':new Date(),
-
             'Server': 'Node Server',
-
             'Developed-By':'Pounze It-Solution Pvt Limited',
-
-            'Pragma': 'public,max-age=31536000'
-
+            'Cache-Control':'public,max-age=31536000',
+            'Pragma': 'public,max-age=31536000',
+            'Content-Type':'text/html'
           });
         }
         
@@ -1834,17 +1747,13 @@ haste.fn = Library.prototype =
     },
 
     parseGet: async function(req)
-
     {
+      // parse get request
+      return new Promise((resolve,reject)=>{
+        var url_parsed = url_module.parse(hasteObj.request.url,true);
 
-        // parse get request
-        return new Promise((resolve,reject)=>{
-          var url_parsed = url_module.parse(hasteObj.request.url,true);
-
-          resolve({status:true,data:url_parsed['query']});  
-        });
-        
-
+        resolve({status:true,data:url_parsed['query']});  
+      });
     },
 
     parsePost: async function(req)
@@ -1861,7 +1770,6 @@ haste.fn = Library.prototype =
 
 
           if((hasteObj.request.method == 'POST' &&  hasteObj.request.headers['content-type'].match(/(multipart\/form\-data\;)/g)))
-
           {
 
             try
@@ -2248,21 +2156,11 @@ function sendAuthorization(msg,res)
         if(!hasteObj.response.headersSent)
         {
           hasteObj.response.writeHead(401,{
-
-            'Cache-Control':'public,max-age=31536000',
-
             'Keep-Alive':' timeout=5, max=500',
-
-            'Expires':new Date(),
-
             'Server': 'Node Server',
-
             'Developed-By':'Pounze It-Solution Pvt Limited',
-
-            'Pragma': 'public,max-age=31536000',
-
+            'Content-Type':'text/html',
             'WWW-Authenticate':'Basic realm="'+msg+'"'
-
           });
         }
         
@@ -2355,6 +2253,8 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
 
       var stat = fs.statSync('./views/'+page+'.html');
 
+      var modifiedDate = new Date(stat.mtimeMs).getTime();
+
       var data = '';
 
       var regexData;
@@ -2426,65 +2326,46 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
 
             {
 
-                if(!hasteObj.cookieStatus)
-
+                if(!hasteObj.response.headersSent)
                 {
-                  if(!hasteObj.response.headersSent)
-                  {
-                    hasteObj.response.writeHead(200,{
-
-                      'Content-Length':data.length,
-
-                      'Cache-Control':'public,max-age=31536000',
-
-                      'Keep-Alive':' timeout=5, max=500',
-
-                      'Expires':new Date(),
-
-                      'Server': 'Node Server',
-
-                      'Developed-By':'Pounze It-Solution Pvt Limited',
-
-                      'Pragma': 'public,max-age=31536000',
-
-                      'Content-Type':'text/html; charset=UTF-8'
-
-                    });
-                  }
-                    
-
+                  hasteObj.response.setHeader("Keep-Alive","timeout=5, max=500");
+                  hasteObj.response.setHeader("Server","Node Server");
+                  hasteObj.response.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+                  hasteObj.response.setHeader('Content-Length',data.length);
+                  hasteObj.response.setHeader('Content-Type','text/html; charset=UTF-8');
                 }
 
+                if(hasteObj.cookieStatus)
+                {
+                  hasteObj.response.setHeader("Set-Cookie",hasteObj.cookieStatus);
+                }
+
+
+                if(hasteObj.maintainanceStat != config.server.maintainance)
+                {
+                  hasteObj.maintainanceStat = config.server.maintainance;
+                  hasteObj.response.statusCode = 200;
+                }
                 else
                 {
-                  if(!hasteObj.response.headersSent)
+                  if(typeof(hasteObj.request.headers['if-modified-since']) == 'undefined')
                   {
-                    hasteObj.response.writeHead(200,{
-
-                      'Content-Length':data.length,
-
-                      'Cache-Control':'public,max-age=31536000',
-
-                      'Keep-Alive':' timeout=5, max=500',
-
-                      'Expires':new Date(),
-
-                      'Server': 'Node Server',
-
-                      'Developed-By':'Pounze It-Solution Pvt Limited',
-
-                      'Pragma': 'public,max-age=31536000',
-
-                      'Content-Type':'text/html; charset=UTF-8',
-
-                      "Set-Cookie":hasteObj.cookieStatus
-
-                    });
+                    hasteObj.response.setHeader('Last-Modified',modifiedDate);
+                    hasteObj.response.statusCode = 200;
                   }
-                    
-
+                  else
+                  {
+                    hasteObj.response.setHeader('Last-Modified',modifiedDate);
+                    if(hasteObj.request.headers['if-modified-since'] < modifiedDate)
+                    {
+                      hasteObj.response.statusCode = 200;
+                    }
+                    else
+                    {
+                      hasteObj.response.statusCode = 304;
+                    }
+                  }
                 }
-
             }
             else
             {
@@ -2517,19 +2398,11 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
           if(!hasteObj.response.headersSent)
           {
             hasteObj.response.writeHead(404,{
-
-                'Cache-Control':'public,max-age=31536000',
-
-                'Keep-Alive':' timeout=5, max=500',
-
-                'Expires':new Date(),
-
-                'Server': 'Node Server',
-
-                'Developed-By':'Pounze It-Solution Pvt Limited',
-
-                'Pragma': 'public,max-age=31536000'
-
+              'Keep-Alive':' timeout=5, max=500',
+              'Server': 'Node Server',
+              'Developed-By':'Pounze It-Solution Pvt Limited',
+              'Cache-Control':'public,max-age=31536000',
+              'Pragma': 'public,max-age=31536000'
            });
           }
          
@@ -2558,20 +2431,12 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
         if(!hasteObj.response.headersSent)
         {
           hasteObj.response.writeHead(500,{
-
-          'Cache-Control':'public,max-age=31536000',
-
-          'Keep-Alive':' timeout=5, max=500',
-
-          'Expires':new Date(),
-
-          'Server': 'Node Server',
-
-          'Developed-By':'Pounze It-Solution Pvt Limited',
-
-          'Pragma': 'public,max-age=31536000'
-
-        });
+            'Keep-Alive':' timeout=5, max=500',
+            'Server': 'Node Server',
+            'Developed-By':"Pounze It-Solution Pvt Limited",
+            'Cache-Control':'public,max-age=31536000',
+            'Pragma': 'public,max-age=31536000'
+          });
         }
         
 

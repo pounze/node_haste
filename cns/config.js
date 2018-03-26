@@ -24,7 +24,7 @@ module.exports = {
 		showHeapUsuage:false,
 		maxListeners:0,
 		socketTimeout:0,
-		cpuCores:'',
+		cpuCores:4,
 		sessionTimeout:5
 	},
 	log:{
@@ -36,5 +36,8 @@ module.exports = {
 		NotAuthorized:"401.html",
 		DirectoryAccess:"403.html",
 		MaintainancePage:"maintainance.html"
+	},
+	compression:{
+		gzip:true
 	}	
 };
