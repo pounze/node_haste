@@ -567,6 +567,7 @@ haste.fn = Library.prototype =
         hasteObj.request = req;
         hasteObj.response = res;
         session.currentSession = '';
+
         /*
 
             Main method of the entire framework
@@ -1070,9 +1071,12 @@ haste.fn = Library.prototype =
 
               if(stat.isFile())
               {
+                var now = new Date();
+                now.setDate(now.getDate()+14);
                 hasteObj.response.setHeader("Keep-Alive","timeout=5, max=500");
                 hasteObj.response.setHeader("Server","Node Server");
                 hasteObj.response.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+                hasteObj.response.setHeader("Expire",now);
 
                 var modifiedDate = new Date(stat.mtimeMs).getTime();
 
