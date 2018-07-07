@@ -691,6 +691,11 @@ haste.fn = Library.prototype =
 
           readerStream.pipe(hasteObj.response);
 
+          hasteObj.response.on("end",function()
+          {
+            readerStream.destroy();
+          });
+
           return false;
         }
 
@@ -796,6 +801,11 @@ haste.fn = Library.prototype =
             var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
 
             readerStream.pipe(res);
+
+            res.on("end",function()
+            {
+              readerStream.destroy();
+            });
 
             console.error(e);
             return false;
@@ -973,6 +983,11 @@ haste.fn = Library.prototype =
 
            readerStream.pipe(hasteObj.response);
 
+           hasteObj.response.on("end",function()
+          {
+            readerStream.destroy();
+          });
+
            return false;
 
         }
@@ -982,18 +997,13 @@ haste.fn = Library.prototype =
       else
 
       {
-
         try
         {
           // checking for static files and have access to that folder
 
-
-
           let staticFilelength = (hasteObj.staticPath == '') ? 0 : hasteObj.staticPath.length;
 
           let notMatchCount = 0;
-
-
 
           for(var i=0; i<staticFilelength; i++)
 
@@ -1001,11 +1011,7 @@ haste.fn = Library.prototype =
 
             url = hasteObj.staticPath[i].replace('/',"\\/");
 
-            
-
             myExp = new RegExp(url+"[a-z0-9A-Z\.]*","i");
-
-
 
             if(requestUri.match(myExp))
 
@@ -1103,12 +1109,20 @@ haste.fn = Library.prototype =
                 if(config.compression.gzip == false)
                 {
                   readerStream.pipe(hasteObj.response);
+                  hasteObj.response.on("end",function()
+                  {
+                    readerStream.destroy();
+                  });
                 }
                 else
                 {
                   var zlib = require('zlib');
                   hasteObj.response.setHeader('content-encoding','gzip');
                   readerStream.pipe(zlib.createGzip()).pipe(hasteObj.response);
+                  hasteObj.response.on("end",function()
+                  {
+                    readerStream.destroy();
+                  });
                 }
               }
               else
@@ -1128,6 +1142,10 @@ haste.fn = Library.prototype =
                 var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
 
                 readerStream.pipe(hasteObj.response);
+                hasteObj.response.on("end",function()
+                {
+                  readerStream.destroy();
+                });
               }
 
               break;
@@ -1172,6 +1190,10 @@ haste.fn = Library.prototype =
               var readerStream = fs.createReadStream('./error_files/'+config.errorPages.DirectoryAccess);
 
               readerStream.pipe(hasteObj.response);
+              hasteObj.response.on("end",function()
+              {
+                readerStream.destroy();
+              });
 
               return false;
 
@@ -1195,6 +1217,10 @@ haste.fn = Library.prototype =
          var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
 
          readerStream.pipe(hasteObj.response);
+         hasteObj.response.on("end",function()
+        {
+          readerStream.destroy();
+        });
 
          return false;
         }
@@ -1340,6 +1366,10 @@ haste.fn = Library.prototype =
                 var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
 
                 readerStream.pipe(res);
+                res.on("end",function()
+                {
+                  readerStream.destroy();
+                });
 
                 console.error(e);
                 return false;
@@ -1505,6 +1535,10 @@ haste.fn = Library.prototype =
           var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
 
           readerStream.pipe(res);
+          res.on("end",function()
+          {
+            readerStream.destroy();
+          });
 
           console.error(e);
           return false;
@@ -1697,6 +1731,10 @@ haste.fn = Library.prototype =
                 var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
 
                 readerStream.pipe(res);
+                res.on("end",function()
+                {
+                  readerStream.destroy();
+                });
 
 
 
@@ -1730,7 +1768,10 @@ haste.fn = Library.prototype =
         var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
 
         readerStream.pipe(res);
-
+        res.on("end",function()
+        {
+          readerStream.destroy();
+        });
 
 
         console.error(e);
@@ -2174,6 +2215,10 @@ function sendAuthorization(msg,res)
         var readerStream = fs.createReadStream('./error_files/'+config.errorPages.NotAuthorized);
 
         readerStream.pipe(res);
+        res.on("end",function()
+        {
+          readerStream.destroy();
+        });
 
     }
 
@@ -2311,9 +2356,6 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
 
         readerStream.on('end',function()
         {
-
-
-
           /*
 
             find string and replacing it
@@ -2354,7 +2396,6 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
                 {
                   if(typeof(hasteObj.request.headers['if-modified-since']) == 'undefined')
                   {
-                    hasteObj.response.setHeader('Last-Modified',modifiedDate);
                     hasteObj.response.statusCode = 200;
                   }
                   else
@@ -2383,12 +2424,22 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
               zlib.gzip(data, function (_, result)
               { 
                 hasteObj.response.write(result);
-                hasteObj.response.end();                 
+                hasteObj.response.end();    
+
+                hasteObj.response.on("end",function()
+                {
+                  readerStream.destroy();
+                }); 
+                            
               });
             }
             else
             {
               hasteObj.response.end(data);
+              hasteObj.response.on("end",function()
+              {
+                readerStream.destroy();
+              });     
             }
 
         });
@@ -2398,7 +2449,7 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
         readerStream.on('error',function()
 
         {
-
+          readerStream.destroy();     
           if(!hasteObj.response.headersSent)
           {
             hasteObj.response.writeHead(404,{
@@ -2413,7 +2464,12 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
 
           var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
 
-           readerStream.pipe(res);
+          readerStream.pipe(res);
+
+          res.on("end",function()
+          {
+            readerStream.destroy();
+          }); 
 
         });
 
@@ -2449,6 +2505,11 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
         var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
 
         readerStream.pipe(res);
+
+        res.on("end",function()
+        {
+          readerStream.destroy();
+        });
 
       console.error(e);
 
@@ -2536,6 +2597,8 @@ function fileReader(path,callback)
 
       callback(data);
 
+      readerStream.destroy();
+
     });
 
 
@@ -2545,6 +2608,8 @@ function fileReader(path,callback)
     {
 
       callback('Failed to get content');
+
+      readerStream.destroy();
 
     });
 
