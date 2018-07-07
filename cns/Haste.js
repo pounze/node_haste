@@ -1672,11 +1672,12 @@ haste.fn = Library.prototype =
 
               var stat = fs.statSync('./templates/'+file+'.js');
 
-              var modifiedDate = new Date(stat.mtimeMs).getTime();
-
+            
               if(stat.isFile())
 
-              {
+              { 
+
+                var modifiedDate = new Date(stat.mtimeMs).getTime();
 
                 if(typeof(hasteObj.request.headers['if-modified-since']) == 'undefined')
                 {
@@ -2302,8 +2303,6 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
 
       var stat = fs.statSync('./views/'+page+'.html');
 
-      var modifiedDate = new Date(stat.mtimeMs).getTime();
-
       var data = '';
 
       var regexData;
@@ -2322,7 +2321,7 @@ function renderPage(Render,req,res,page,code = null,headers = null,compression =
 
       {
 
-
+        var modifiedDate = new Date(stat.mtimeMs).getTime();
 
         /*
 
