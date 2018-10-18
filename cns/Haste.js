@@ -24,13 +24,13 @@
 
 */
 
-
-
 const fs = require('fs');
 
 const http = require('http');
 
 const https = require('https');
+
+const http2 = require("http2");
 
 const url_module = require('url');
 
@@ -40,12 +40,13 @@ const cluster = require('cluster');
 
 const qs = require('querystring');
 
-const config = require(__dirname+'/config.js');
-
-const sessionObj = require(__dirname+'/session.js');
-
 const stream = require('stream');
 
+const config = require(__dirname+'/config.js');
+
+var viewsObj = require('../common_templates/common_templates.js');
+
+const sessionObj = require(__dirname+'/session.js');
 
 
 /*
@@ -55,40 +56,29 @@ const stream = require('stream');
 */
 
 
-
-
-
 var haste = function(params)
-
 {
-
     return new Library(params);
-
 };
 
-
-
-/*
-
-  Library constructor variables are initialized
-
-*/
-
-
-
 var Library = function(params)
-
 {
 
   this.input = {};
 
   this.staticPath = [];
 
+  this.globalGETObject = {};
+  
+  this.globalPOSTObject = {};
+
   this.globalObject = {};
 
-  this.request = {};
+  this.cacheDocFile = {};
 
-  this.response = {};
+  this.req = {};
+
+  this.res = {};
 
   this.cookieStatus = false;
 
@@ -96,11 +86,45 @@ var Library = function(params)
 
   this.maintainanceStat = undefined;
 
+  this.server = null;
+
+  this.AllowModules = {};
+
+  var date = new Date();
+
+  this.header404 = {
+    'Keep-Alive':' timeout=5, max=500',
+	'Server': 'Node Server',
+	'Developed-By':'Pounze It-Solution Pvt Limited',
+	'Cache-Control':'no-store, no-cache, must-revalidate',
+	'Pragma': 'public,max-age=31536000',
+	'Content-Type':'text/html',
+	'Expires':date
+  };
+
+  this.header500 = {
+    'Keep-Alive':' timeout=5, max=500',
+	'Server': 'Node Server',
+	'Developed-By':'Pounze It-Solution Pvt Limited',
+	'Cache-Control':'no-store, no-cache, must-revalidate',
+	'Pragma': 'public,max-age=31536000',
+	'Content-Type':'text/html',
+	'Expires':date
+  };
+
+  this.header403 = {
+    'Keep-Alive':' timeout=5, max=500',
+    'Server': 'Node Server',
+    'Developed-By':'Pounze It-Solution Pvt Limited',
+    'Cache-Control':'no-store, no-cache, must-revalidate',
+    'Pragma': 'public,max-age=31536000',
+    'Content-Type':'text/html',
+    'Expires':date
+  };
+
   return this;
 
 };
-
-
 
 /*
 
@@ -108,1808 +132,219 @@ var Library = function(params)
 
 */
 
-
-
 var hasteObj = haste();
 
-
-
-/*
-
-    Library protyping is used to add more methods and objects to haste.fn Object
-
-*/
-
-
-
 haste.fn = Library.prototype = 
-
 {
-
-
-
-    /*
-
-        Http method to create Http Server
-
-    */
-
-
-
-    HttpServer:function(ip,port,callback = null)
-
+	HttpServer:async function(ip,port,callback = null)
     {
-
-        /*
-
-            If ip and port is defined
-
-        */
-
-
-
-       if(typeof(ip) != 'undefined' && typeof(port) != 'undefined' && ip != '' && port != '')
-
-       {
-
-
-
-        /*
-
-            checking for CPU cores and creating child process accordingly
-
-        */
-
-
-
-        var cpuCount = null;
-
-        if(cluster.isMaster)
-
-        {
-
-          if(typeof(config.server.cpuCores) != 'undefined' && typeof(config.server.cpuCores) == 'number')
-
-          {
-
-            cpuCount = config.server.cpuCores;
-
-          }
-
-          else
-
-          {
-
-            cpuCount = require('os').cpus().length;
-
-          }
-
-          for(var i=0;i<cpuCount;i++)
-
-          {
-
-            cluster.fork();
-
-          }
-
-
-
-          cluster.on('exit',()=>{
-
-            cluster.fork();
-
-          });
-
-        }
-
-        else
-
-        {
-
-         /*
-
-            Http server is created
-
-         */
-
-          var server = http.createServer(haste.fn.handleRequest);
-
-          /*
-
-            Http server configurations
-
-          */
-
-          server.on('connection',function(socket)
-
-          { 
-
-            socket.setTimeout(config.server.socketTimeout);
-
-          });
-
-
-
-          server.setTimeout(config.server.setTimeout);
-
-
-
-          server.setMaxListeners(config.server.maxListeners);
-
-
-
-          server.on('clientError', (err, socket) => {
-
-            socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-
-          });
-
-
-
-          /*
-
-            Server listening and closing the server
-
-          */
-
-
-
-          server.listen(port,ip);
-
-          server.close();
-
-
-
-          /*
-
-            sending server object as callback
-
-          */
-
-
-
-          if(callback != null && typeof(callback) == 'function')
-
-          {
-
-            callback(server);
-
-          }
-
-          else
-
-          {
-
-            return server;
-
-          }
-
-        }
-
-      }
-
-      else
-
-      {
-
-        console.error('Please enter Ip address and port');
-
-        return false;
-
-      }
-
+    	return handleHttpServer(ip,port,callback).catch(function(error)
+    	{
+    		console.error(error);
+    	});
     },
-
-    HttpsServer:function(ip,port,options,callback = null)
+    HttpsServer:async function(ip,port,options,callback = null)
     {
-
-      // var options = {
-      //   key: key,
-      //   cert: cert,
-      //   ca: ca
-      // };
-
-        /*
-
-            https server is created
-
-        */
-
-
-
-        /*
-
-            checking for ip address and port
-
-        */
-
-
-
-      if(typeof(ip) != 'undefined' && typeof(port) != 'undefined' && ip != '' && port != '')
-
-      {
-
-
-
-        /*
-
-            Checking for CPU cores and creating child process accordingly
-
-        */
-
-
-
-        var cpuCount = null;
-
-        if(cluster.isMaster)
-
-        {
-
-          if(typeof(config.server.cpuCores) != 'undefined' && typeof(config.server.cpuCores) == 'number')
-
-          {
-
-            cpuCount = config.server.cpuCores;
-
-          }
-
-          else
-
-          {
-
-            cpuCount = require('os').cpus().length;
-
-          }
-
-          
-
-          for(var i=0;i<cpuCount;i++)
-
-          {
-
-            cluster.fork();
-
-          }
-
-
-
-          cluster.on('exit',()=>{
-
-            cluster.fork();
-
-          });
-
-        }
-
-        else
-
-        {
-
-
-
-          /*
-
-            Https server is created
-
-          */
-
-          var server = https.createServer(options,haste.fn.handleRequest);
-
-
-          /*
-
-            Server confugurations
-
-          */
-
-          server.on('connection',function(socket)
-
-          { 
-
-            socket.setTimeout(config.server.socketTimeout);
-
-          });
-
-
-
-          server.setTimeout(config.server.setTimeout);
-
-
-
-          server.setMaxListeners(config.server.maxListeners);
-
-
-
-          server.on('clientError', (err, socket) => {
-
-            socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-
-          });
-
-
-
-          /*
-
-            Server listening and closing the server
-
-          */
-
-
-
-          server.listen(port,ip);
-
-          server.close();
-
-
-
-          /*
-
-            sending server object as callback
-
-          */
-
-
-
-          if(callback != null && typeof(callback) == 'function')
-
-          {
-
-            callback(server);
-
-          }
-
-          else
-
-          {
-
-            return server;
-
-          }
-
-        }
-
-      }
-
-      else
-
-      {
-
-        console.error('Please enter Ip address and port');
-
-        return false;
-
-      }
-
+    	return handleHttpsServer(ip,port,options,callback).catch(function(error)
+    	{
+    		console.error(error);
+    	});
     },
-    DefaultMethod:function(callback)
+    DefaultMethod:async function(callback)
     {
       defaultMethod = callback;
     },
-    getIpAddress:function(req,res)
-
-    {
-
-        /*
-
-            Requiring IP address to get use ip address 
-
-        */
-
-
-
-        let getIpObject = require('../blockusers/IpAddress.js');
-
-        let ip;
-
-
-
-        if (hasteObj.request.headers['x-forwarded-for'])
-
-        {
-
-            ip = hasteObj.request.headers['x-forwarded-for'].split(",")[0];
-
-        }
-
-        else if(hasteObj.request.connection && hasteObj.request.connection.remoteAddress)
-
-        {
-
-            ip = hasteObj.request.connection.remoteAddress;
-
-        } 
-
-        else
-
-        {
-
-            ip = hasteObj.request.ip;
-
-        }
-
-
-
-        /*
-
-            matching the ip address and status
-
-        */
-
-
-
-        if(getIpObject[ip])
-
-        {
-
-            if(!hasteObj.response.headersSent)
-            {
-              hasteObj.response.writeHead(404,{
-                'Keep-Alive':' timeout=5, max=500',
-                'Server': 'Node Server',
-                'Developed-By':'Pounze It-Solution Pvt Limited'
-              });
-            }
-
-            hasteObj.response.end('Something went wrong');
-
-            return false;
-
-        }
-
-    },
-
-    handleRequest: async function(req,res)
-    {
-      if(typeof(defaultMethod) != 'undefined')
-      {
-        defaultMethod(req,res);
-      }
-        hasteObj.request = req;
-        hasteObj.response = res;
-        session.currentSession = '';
-
-        /*
-
-            Main method of the entire framework
-
-
-
-            this methods handles all https and http request
-
-
-
-        */
-
-
-
-        /*
-
-            Checking for heap memory total and used
-
-        */
-
-
-
-        haste.fn.getIpAddress(hasteObj.request,hasteObj.response);
-
-
-
-        var heapUsuage = data = null;
-
-        heapUsuage = process.memoryUsage();
-
-        
-
-        if(config.server.showHeapUsuage)
-        {
-          console.error('Heap used '+heapUsuage['heapUsed'] +' | Heap total size: '+heapUsuage['heapTotal']);
-        }
-
-        
-
-        if(heapUsuage['heapUsed'] > heapUsuage['heapTotal'])
-        {
-          data = {
-            status:false,
-            msg:'Server is to busy'
-          };
-          hasteObj.response.end(JSON.stringify(data));
-
-        }
-
-
-
-        /*
-
-            request object methods
-
-        */
-
-        hasteObj.request.on('error',function()
-        {
-          console.error('Error in server');
-          return false;
-        });
-
-
-
-        hasteObj.request.on("end", function()
-
-        {
-
-          // request ended normally
-
-        });
-
-
-
-
-
-        /*
-
-            this checked is responsible for server maintainance
-
-            if mantainance object is set true then 
-
-            maintanance html page is shown to user
-
-        */
-
-        if(config.server.maintainance)
-        {
-          if(!hasteObj.response.headersSent)
-          {
-            hasteObj.response.setHeader("Keep-Alive","timeout=5, max=500");
-            hasteObj.response.setHeader("Server","Node Server");
-            hasteObj.response.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
-            hasteObj.response.setHeader("Content-Type","text/html");
-          }
-          
-          var stat = fs.statSync('./error_files/'+config.errorPages.MaintainancePage);
-
-          var modifiedDate = new Date(stat.mtimeMs).getTime();
-
-          if(typeof(hasteObj.request.headers['if-modified-since']) == 'undefined')
-          {
-            hasteObj.response.setHeader('Last-Modified',modifiedDate);
-            hasteObj.response.statusCode = 200;
-          }
-          else
-          {
-            hasteObj.response.setHeader('Last-Modified',modifiedDate);
-            if(hasteObj.request.headers['if-modified-since'] < modifiedDate)
-            {
-              hasteObj.response.statusCode = 200;
-            }
-            else
-            {
-              hasteObj.response.statusCode = 304;
-            }
-          }
-
-          var readerStream = fs.createReadStream('./error_files/'+config.errorPages.MaintainancePage);
-
-          readerStream.pipe(hasteObj.response);
-
-          hasteObj.response.on("end",function()
-          {
-            readerStream.destroy();
-          });
-
-          return false;
-        }
-
-        /*
-
-          getting global object length to know if any routes is created
-
-        */
-
-
-
-        let uriListLen = Object.keys(hasteObj.globalObject).length;
-
-
-
-        /*
-
-          if length is zero error is thrown to created a route
-
-        */
-
-
-
-        if(uriListLen == 0)
-
-        {
-
-          console.error('Please create a route');
-
-          return false;
-
-        }
-
-
-
-      let requestMethod = hasteObj.request.method;
-
-      let requestUri = url_module.parse(hasteObj.request.url).pathname;
-
-      let ext = (/[.]/.exec(requestUri)) ? /[^.]+$/.exec(requestUri) : undefined;
-
-      let myExp;
-
-      let notMatchCount = 0;
-
-      let tempMapping = '';
-
-      /*
-        Cortex Concept for accessing apis more directly and easily
-      */
-
-
-      if(requestMethod == 'POST' && requestUri == '/cortex')
-      {
-        var parseCb = await haste.fn.parsePost(hasteObj.request);
-
-        if(parseCb.status)
-        {
-          hasteObj.input['requestData'] = parseCb.data;
-
-          try
-          {
-
-            if(typeof(hasteObj.input['requestData']['mapping']) != 'undefined' && hasteObj.input['requestData']['mapping'] != '')
-            {
-              tempMapping = hasteObj.input['requestData']['mapping'].split('.');
-              tempMapping = tempMapping.join('/');
-            }
-
-           var stat = fs.statSync('./controllers/'+tempMapping+'/'+hasteObj.input['requestData']['cortex']+'.js');
-
-            if(stat.isFile())
-            {
-              var controller = require('../controllers/'+tempMapping+'/'+hasteObj.input['requestData']['cortex']+'.js');
-
-              controller.main(req,res,hasteObj.input);
-            }
-            else
-            {
-              console.error('Controller must me a javascript file'); 
-            }
-
-          }
-
-          catch(e)
-
-          {
-
-            if(!hasteObj.response.headersSent)
-            {
-              hasteObj.response.writeHead(404,{
-                'Keep-Alive':' timeout=5, max=500',
-                'Server': 'Node Server',
-                'Developed-By':'Pounze It-Solution Pvt Limited',
-                'Cache-Control':'public,max-age=31536000',
-                'Pragma': 'public,max-age=31536000'
-              });
-            }
-            
-
-
-
-            var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
-
-            readerStream.pipe(res);
-
-            res.on("end",function()
-            {
-              readerStream.destroy();
-            });
-
-            console.error(e);
-            return false;
-
-          }
-        }
-        else
-        {
-          hasteObj.response.writeHead(500,{
-            'Keep-Alive':' timeout=5, max=500',
-            'Server': 'Node Server',
-            'Developed-By':'Pounze It-Solution Pvt Limited',
-            'Cache-Control':'public,max-age=31536000',
-            'Pragma': 'public,max-age=31536000'
-          });
-          hasteObj.response.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
-          return; 
-        }
-
-        return false;
-      }
-
-
-      /*
-
-        checking for extention of the request
-
-      */
-
-
-
-      if(ext == undefined)
-      {
-        /*
-
-          if extention is undefined then its url api request else static file request
-
-        */
-
-        /*
-
-          Iterating through the whole object
-
-        */
-
-
-
-        for(obj in hasteObj.globalObject)
-
-        {
-          /*
-
-            Iterating through object in to match uri and parse request accordingly            
-
-          */
-
-            myExp = new RegExp('^'+hasteObj.globalObject[obj]["regex"]+'$');
-
-            if(requestUri.match(myExp) && requestMethod == hasteObj.globalObject[obj]['request_type'])
-            {
-              let requestUriArr = requestUri.split('/');
-
-              let matchedArr = hasteObj.globalObject[obj]["uri"].split('/');
-
-              let matchedArrLen = matchedArr.length;
-
-              for(let mat=1;mat<matchedArrLen;mat++)
-              {
-                hasteObj.input[matchedArr[mat]] = requestUriArr[mat];
-              }
-
-
-
-              switch(requestMethod)
-              {
-
-                case "GET":
-
-                  var parseCb = await haste.fn.parseGet(hasteObj.request);
-
-                  if(parseCb.status)
-                  {
-                    hasteObj.input['requestData'] = parseCb.data;
-
-                    haste.fn.modules(hasteObj.request,hasteObj.response,hasteObj,obj);
-                  }
-                  else
-                  {
-                    hasteObj.response.writeHead(500,{
-                      'Keep-Alive':' timeout=5, max=500',
-                      'Server': 'Node Server',
-                      'Developed-By':'Pounze It-Solution Pvt Limited',
-                      'Cache-Control':'public,max-age=31536000',
-                      'Pragma': 'public,max-age=31536000'
-                    });
-
-                    hasteObj.response.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
-                    return; 
-                  }
-
-                break;
-
-                case "POST":
-
-                  var parseCb = await haste.fn.parsePost(hasteObj.request);
-
-                  if(parseCb.status)
-                  {
-                    hasteObj.input['requestData'] = parseCb.data;
-
-                    haste.fn.modules(hasteObj.request,hasteObj.response,hasteObj,obj);
-                  }
-                  else
-                  {
-                    hasteObj.response.writeHead(500,{
-                      'Keep-Alive':' timeout=5, max=500',
-                      'Server': 'Node Server',
-                      'Developed-By':'Pounze It-Solution Pvt Limited',
-                      'Cache-Control':'public,max-age=31536000',
-                      'Pragma': 'public,max-age=31536000'
-                    });
-
-                    hasteObj.response.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
-                    return;
-                  }
-
-                break;
-
-                default:
-
-                console.error('Invalid Request');
-
-              }
-
-              break;
-
-            }
-
-            else
-
-            {
-
-              notMatchCount += 1;
-
-            }
-
-        }
-
-
-
-        /*
-
-          If no match is found then 404 error is thrown
-
-        */
-
-
-
-        if(notMatchCount == uriListLen)
-
-        {
-
-            if(!hasteObj.response.headersSent)
-            {
-              hasteObj.response.writeHead(404,{
-                'Keep-Alive':' timeout=5, max=500',
-                'Server': 'Node Server',
-                'Developed-By':'Pounze It-Solution Pvt Limited',
-                'Cache-Control':'public,max-age=31536000',
-                'Pragma': 'public,max-age=31536000'
-              });
-            }
-
-           var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
-
-           readerStream.pipe(hasteObj.response);
-
-           hasteObj.response.on("end",function()
-          {
-            readerStream.destroy();
-          });
-
-           return false;
-
-        }
-
-      }
-
-      else
-
-      {
-        try
-        {
-          // checking for static files and have access to that folder
-
-          let staticFilelength = (hasteObj.staticPath == '') ? 0 : hasteObj.staticPath.length;
-
-          let notMatchCount = 0;
-
-          for(var i=0; i<staticFilelength; i++)
-
-          {
-
-            url = hasteObj.staticPath[i].replace('/',"\\/");
-
-            myExp = new RegExp(url+"[a-z0-9A-Z\.]*","i");
-
-            if(requestUri.match(myExp))
-
-            {
-
-              switch(PATHNAME.extname(ext['input']))
-
-              {
-
-                case '.css': hasteObj.response.setHeader("Content-Type", "text/css");
-
-                break;
-
-                case '.ico' : hasteObj.response.setHeader("Content-Type","image/ico");
-
-                break;
-
-                case '.js' : hasteObj.response.setHeader("Content-Type", "text/javascript");
-
-                break;
-
-                case '.jpeg' : hasteObj.response.setHeader("Content-Type", "image/jpg");
-
-                break;
-
-                case '.jpg' : hasteObj.response.setHeader("Content-Type", "image/jpg");
-
-                break;
-
-                case '.png' : hasteObj.response.setHeader("Content-Type", "image/png");
-
-                break;
-
-                case '.gif' : hasteObj.response.setHeader("Content-Type", "image/gif");
-
-                break;
-
-                case '.json' : hasteObj.response.setHeader("Content-Type", "application/json");
-
-                break;
-
-                case '.pdf' : hasteObj.response.setHeader("Content-Type", "application/pdf");
-
-                break;
-
-                case '.ttf' : hasteObj.response.setHeader("Content-Type", "application/octet-stream");
-
-                break;
-
-                case '.html' : hasteObj.response.setHeader("Content-Type", "text/html");
-
-                break;
-
-                case '.woff' : hasteObj.response.setHeader("Content-Type", "application/x-font-woff");
-
-                break;
-
-                default : hasteObj.response.setHeader("Content-Type", "text/plain");
-
-              }
-
-              var stat = fs.statSync('./'+requestUri);
-
-              if(stat.isFile())
-              {
-                var now = new Date();
-                now.setDate(now.getDate()+14);
-                hasteObj.response.setHeader("Keep-Alive","timeout=5, max=500");
-                hasteObj.response.setHeader("Server","Node Server");
-                hasteObj.response.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
-                hasteObj.response.setHeader("Expire",now);
-
-                var modifiedDate = new Date(stat.mtimeMs).getTime();
-
-                if(typeof(hasteObj.request.headers['if-modified-since']) == 'undefined')
-                {
-                  hasteObj.response.setHeader('Last-Modified',modifiedDate);
-                  hasteObj.response.statusCode = 200;
-                }
-                else
-                {
-                  hasteObj.response.setHeader('Last-Modified',modifiedDate);
-                  if(hasteObj.request.headers['if-modified-since'] < modifiedDate)
-                  {
-                    hasteObj.response.statusCode = 200;
-                  }
-                  else
-                  {
-                    hasteObj.response.statusCode = 304;
-                  }
-                }
-
-                readerStream = fs.createReadStream('./'+requestUri);
-                
-                if(config.compression.gzip == false)
-                {
-                  readerStream.pipe(hasteObj.response);
-                  hasteObj.response.on("end",function()
-                  {
-                    readerStream.destroy();
-                  });
-                }
-                else
-                {
-                  var zlib = require('zlib');
-                  hasteObj.response.setHeader('content-encoding','gzip');
-                  readerStream.pipe(zlib.createGzip()).pipe(hasteObj.response);
-                  hasteObj.response.on("end",function()
-                  {
-                    readerStream.destroy();
-                  });
-                }
-              }
-              else
-              {
-                if(!hasteObj.response.headersSent)
-                {
-                  hasteObj.response.writeHead(404,{
-                    'Keep-Alive':' timeout=5, max=500',
-                    'Server': 'Node Server',
-                    'Developed-By':'Pounze It-Solution Pvt Limited',
-                    'Cache-Control':'public,max-age=31536000',
-                    'Pragma': 'public,max-age=31536000',
-                    'Content-Type':'text/html'
-                  });
-                }
-                
-                var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
-
-                readerStream.pipe(hasteObj.response);
-                hasteObj.response.on("end",function()
-                {
-                  readerStream.destroy();
-                });
-              }
-
-              break;
-
-            }
-
-            else
-
-            {
-
-              notMatchCount += 1;
-
-            }
-
-          }
-
-
-
-          // if no match found 404 error is thrown
-
-
-
-          if(notMatchCount == staticFilelength)
-
-          {
-
-            if(!hasteObj.response.headersSent)
-            {
-              hasteObj.response.writeHead(403,{
-                'Keep-Alive':' timeout=5, max=500',
-                'Server': 'Node Server',
-                'Developed-By':'Pounze It-Solution Pvt Limited',
-                'Cache-Control':'public,max-age=31536000',
-                'Pragma': 'public,max-age=31536000',
-                'Content-Type':'text/html'
-              });
-            }
-            
-
-
-
-              var readerStream = fs.createReadStream('./error_files/'+config.errorPages.DirectoryAccess);
-
-              readerStream.pipe(hasteObj.response);
-              hasteObj.response.on("end",function()
-              {
-                readerStream.destroy();
-              });
-
-              return false;
-
-          }
-        }
-        catch(e)
-        {
-          if(!hasteObj.response.headersSent)
-          {
-            hasteObj.response.writeHead(500,{
-              'Keep-Alive':' timeout=5, max=500',
-              'Server': 'Node Server',
-              'Developed-By':'Pounze It-Solution Pvt Limited',
-              'Cache-Control':'public,max-age=31536000',
-              'Pragma': 'public,max-age=31536000',
-              'Content-Type':'text/html'
-            });
-          }
-          
-
-         var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
-
-         readerStream.pipe(hasteObj.response);
-         hasteObj.response.on("end",function()
-        {
-          readerStream.destroy();
-        });
-
-         return false;
-        }
-
-      }
-
-
-
-      
-
-    },
-
-    modules:function(req,res,hasteObj,obj)
-
-    {
-
-      /*
-
-        checking for middleware if array or string 
-
-        if array then multiple middleware
-
-        else single middleware
-
-      */
-
-     var success = 0;
-
-
-      if(typeof(hasteObj.globalObject[obj]["middleware"]) != 'undefined')
-
-      {
-
-        if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'object' && Array.isArray(hasteObj.globalObject[obj]["middleware"]))
-
-        {
-
-            let middlewareLen = hasteObj.globalObject[obj]["middleware"].length;
-
-            for(var j=0;j<middlewareLen;j++)
-
-            {
-
-
-
-              // iterating thoough the middleware
-
-
-
-              try
-
-              {
-
-
-
-                // checking if the middleware file exists or not
-
-
-
-                var middlewarestat = fs.statSync('./middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
-
-
-
-                // if the middleware is a file
-
-
-
-                if(middlewarestat.isFile())
-
-                {
-
-
-
-                    // then invoke the middleware main method
-
-
-
-                  var middlewareFile = require('../middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
-
-                  var middlewareCallbacks = middlewareFile.main(req,res,hasteObj.input);
-
-                  if(!middlewareCallbacks[0])
-
-                  {
-
-                    // if middleware callback is false then request is stopped here
-
-
-
-                    hasteObj.response.setHeader('Content-Type','application/json');
-
-                    hasteObj.response.end(JSON.stringify(middlewareCallbacks[1]));
-
-                    return false;
-
-                  }
-
-                  else
-
-                  {
-
-                    hasteObj.input[hasteObj.globalObject[obj]["middleware"][j]] = middlewareCallbacks[1];
-
-                    success += 1;
-
-                  }
-
-                }
-
-                else
-
-                {
-
-                  console.error('Middlware must be a javascript file');
-
-                }
-
-              }
-
-              catch(e)
-
-              {
-
-                // if file is not found of the middleware then 500 internal server error is thrown
-
-
-
-                if(!hasteObj.response.headersSent)
-                {
-                  hasteObj.response.writeHead(500,{
-                    'Keep-Alive':' timeout=5, max=500',
-                    'Server': 'Node Server',
-                    'Developed-By':'Pounze It-Solution Pvt Limited',
-                    'Cache-Control':'public,max-age=31536000',
-                    'Pragma': 'public,max-age=31536000',
-                    'Content-Type':'text/html'
-                  });
-                }
-                
-
-
-
-                var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
-
-                readerStream.pipe(res);
-                res.on("end",function()
-                {
-                  readerStream.destroy();
-                });
-
-                console.error(e);
-                return false;
-
-              }
-
-            }
-
-            if(success == middlewareLen)
-            {
-              haste.fn.executeMethod(req,res,hasteObj,obj);
-            }
-        }
-
-        else if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'string')
-
-        {
-
-            let middlewarestat = fs.statSync('./middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
-
-            if(middlewarestat.isFile())
-
-            {
-
-              let middlewareFile = require('../middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
-
-              let middlewareCallbacks = middlewareFile.main(req,res,hasteObj.input);
-
-              if(!middlewareCallbacks[0])
-
-              {
-
-                hasteObj.response.setHeader('Content-Type','application/json');
-
-                hasteObj.response.end(JSON.stringify(middlewareCallbacks[1]));
-
-                return false;
-
-              }
-
-              else
-
-              {
-
-                hasteObj.input[hasteObj.globalObject[obj]["middleware"]] = middlewareCallbacks[1];
-
-                haste.fn.executeMethod(req,res,hasteObj,obj);
-
-              }
-
-            }
-
-            else
-
-            {
-
-              console.error('Middlware must be a javascript file');
-
-            }
-
-        }
-
-        else
-
-        {
-
-            console.error("Middleware must be string or array");
-
-        }
-
-      }  
-
-      else
-
-      {
-
-        haste.fn.executeMethod(req,res,hasteObj,obj);
-
-      }    
-
-    },
-
-    executeMethod:function(req,res,hasteObj,obj)
-
-    {
-
-      /*
-
-        checking if the second argument is string or function
-
-
-
-        if string then it is passed to 
-
-
-        else callback is given to method
-
-      */
-
-
-
-
-
-      if(typeof(hasteObj.globalObject[obj]["argument"]) == 'function')
-
-      {
-
-        hasteObj.globalObject[obj]["argument"](req,res,hasteObj.input);
-
-      }
-
-      else if(typeof(hasteObj.globalObject[obj]["argument"]) == 'string')
-
-      {
-
-        try
-
-        {
-
-         var stat = fs.statSync('./controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
-
-          
-
-          if(stat.isFile())
-
-          {
-
-            var controller = require('../controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
-
-            controller.main(req,res,hasteObj.input);
-
-          }
-
-          else
-
-          {
-
-            console.error('Controller must me a javascript file'); 
-
-          }
-
-        }
-
-        catch(e)
-
-        {
-
-          if(!hasteObj.response.headersSent)
-          {
-            hasteObj.response.writeHead(500,{
-              'Keep-Alive':' timeout=5, max=500',
-              'Server': 'Node Server',
-              'Developed-By':'Pounze It-Solution Pvt Limited',
-              'Cache-Control':'public,max-age=31536000',
-              'Pragma': 'public,max-age=31536000',
-              'Content-Type':'text/html'
-            });
-          }
-          
-
-
-
-          var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
-
-          readerStream.pipe(res);
-          res.on("end",function()
-          {
-            readerStream.destroy();
-          });
-
-          console.error(e);
-          return false;
-
-        }
-
-      }
-
-      else
-
-      {
-
-        console.error('Route\'s second argument must me function of string ' + typeof(hasteObj.argument[i]) + ' given');
-
-      }
-
-    },
-
+    dependencies:{},
     get:function(uri,argument)
-
     {
-
         // get method for get routers
 
-        
-
-        hasteObj.globalObject[uri] = {
-
+        hasteObj.globalGETObject[uri] = {
             "uri":uri,
-
             "request_type":"GET",
-
             "argument":argument,
-
             "regex":uri
-
         };
+
+        this.requestType = "GET";
 
         this.path = uri;
 
         return this;
-
     },
-
     post:function(uri,argument)
-
     {
-
-
-
         // post method for post routers
 
-        hasteObj.globalObject[uri] = {
-
+        hasteObj.globalPOSTObject[uri] = {
             "uri":uri,
-
             "request_type":"POST",
-
             "argument":argument,
-
             "regex":uri
-
         };
+
+        this.requestType = "POST";
 
         this.path = uri;
 
         return this;
-
     },
-
-    middlewares:function(middleware)
-
-    {   
-
-      hasteObj.globalObject[this.path].middleware = middleware;
-
-      return this;
-
-    },
-
-    where:function(regex)
-
+    put:async function(uri,argument)
     {
 
-      // checking for regular expression match
+    },
+    delete:async function(uri,argument)
+    {
 
-      hasteObj.globalObject[this.path].regexExp = regex;
-
-      hasteObj.globalObject[this.path]['regex'] = hasteObj.globalObject[this.path]['uri'];
-
-
-      for(regex in hasteObj.globalObject[this.path]['regexExp'])
+    },
+    middlewares:function(middleware)
+    {   
+      try
       {
-        hasteObj.globalObject[this.path]['regex'] = hasteObj.globalObject[this.path]['regex'].replace(regex,hasteObj.globalObject[this.path]['regexExp'][regex]);
+      	if(this.requestType == "GET")
+      	{
+      		hasteObj.globalGETObject[this.path].middleware = middleware;
+      	}
+      	else if(this.requestType == "POST")
+      	{
+      		hasteObj.globalPOSTObject[this.path].middleware = middleware;
+      	}
+      }
+      catch(e)
+      {
+      	console.error(e);
       }
 
       return this;
-
     },
-
-    views:async function(file,req,res,data)
-
+    where:function(regex)
     {
-
-        /*
-
-        views get file and send data
-
-      */
 
       try
-
       {
+      	// checking for regular expression match
 
-        var common_templates_stat = fs.statSync('./common_templates/common_templates.js');
+	    if(this.requestType == "GET")
+	    {
+	    	hasteObj.globalGETObject[this.path].regexExp = regex;
 
+	     	hasteObj.globalGETObject[this.path]['regex'] = hasteObj.globalGETObject[this.path]['uri'];
 
+	     	for(regex in hasteObj.globalGETObject[this.path]['regexExp'])
+	      	{
+	        	hasteObj.globalGETObject[this.path]['regex'] = hasteObj.globalGETObject[this.path]['regex'].replace(regex,hasteObj.globalGETObject[this.path]['regexExp'][regex]);
+	      	}
+	    }
+	    else if(this.requestType == "POST")
+	    {
+	    	hasteObj.globalPOSTObject[this.path].regexExp = regex;
 
-        if(common_templates_stat.isFile())
+	     	hasteObj.globalPOSTObject[this.path]['regex'] = hasteObj.globalPOSTObject[this.path]['uri'];
 
-        {
-
-            var views = require('../common_templates/common_templates.js');
-
-            var commongData = await views.main(req,res,data);
-
-
-
-            try
-            {
-
-              var stat = fs.statSync('./templates/'+file+'.js');
-
-            
-              if(stat.isFile())
-
-              { 
-
-                var modifiedDate = new Date(stat.mtimeMs).getTime();
-
-                if(typeof(hasteObj.request.headers['if-modified-since']) == 'undefined')
-                {
-                  hasteObj.response.setHeader('Last-Modified',modifiedDate);
-                  hasteObj.response.statusCode = 200;
-                }
-                else
-                {
-                  hasteObj.response.setHeader('Last-Modified',modifiedDate);
-                  if(hasteObj.request.headers['if-modified-since'] < modifiedDate)
-                  {
-                    hasteObj.response.statusCode = 200;
-                  }
-                  else
-                  {
-                    hasteObj.response.statusCode = 304;
-                  }
-                }
-
-
-                var views = require('../templates/'+file+'.js');
-
-                views.main(req,res,data,commongData);
-
-              }
-
-              else
-
-              {
-
-                console.error('View template page name must be a javascript file');
-
-              }
-            }
-            catch(e)
-            {
-                if(!hasteObj.response.headersSent)
-                {
-                  hasteObj.response.writeHead(500,{
-                    'Keep-Alive':' timeout=5, max=500',
-                    'Server': 'Node Server',
-                    'Developed-By':'Pounze It-Solution Pvt Limited',
-                    'Cache-Control':'public,max-age=31536000',
-                    'Pragma': 'public,max-age=31536000',
-                    'Content-Type':'text/html'
-                  });
-                }
-                
-
-
-
-                var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
-
-                readerStream.pipe(res);
-                res.on("end",function()
-                {
-                  readerStream.destroy();
-                });
-
-
-
-                console.error(e);
-
-            }
-
-        }
+	     	for(regex in hasteObj.globalPOSTObject[this.path]['regexExp'])
+	      	{
+	        	hasteObj.globalPOSTObject[this.path]['regex'] = hasteObj.globalPOSTObject[this.path]['regex'].replace(regex,hasteObj.globalPOSTObject[this.path]['regexExp'][regex]);
+	      	}
+	    }
 
       }
-
       catch(e)
-
       {
-
-        if(!hasteObj.response.headersSent)
-        {
-          hasteObj.response.writeHead(500,{
-            'Keep-Alive':' timeout=5, max=500',
-            'Server': 'Node Server',
-            'Developed-By':'Pounze It-Solution Pvt Limited',
-            'Cache-Control':'public,max-age=31536000',
-            'Pragma': 'public,max-age=31536000',
-            'Content-Type':'text/html'
-          });
-        }
-        
-
-
-
-        var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
-
-        readerStream.pipe(res);
-        res.on("end",function()
-        {
-          readerStream.destroy();
-        });
-
-
-        console.error(e);
-
+      	console.error(e);
       }
+
+      return this;
 
     },
+    views:async function(file,req,res,data)
+    {
 
+      /*
+        views get file and send data
+      */
+
+	    try
+	    {
+
+	      var commongData = await viewsObj.init(req,res,data);
+
+	      var stat = await fileStat('./templates/'+file+'.js');
+
+	      if(stat != undefined && stat.isFile())
+	      { 
+
+	        var modifiedDate = new Date(stat.mtimeMs).getTime();
+
+	        if(!hasteObj.res.headersSent)
+	        {
+	        	if(typeof(hasteObj.req.headers['if-none-match']) == 'undefined')
+	            {
+	              hasteObj.res.setHeader('ETag',modifiedDate);
+	              hasteObj.res.statusCode = 200;
+	            }
+	            else
+	            {
+	              hasteObj.res.setHeader('ETag',modifiedDate);
+	              if(hasteObj.req.headers['if-none-match'] != modifiedDate)
+	              {
+	                hasteObj.res.statusCode = 200;
+	              }
+	              else
+	              {
+	                hasteObj.res.statusCode = 304;
+	              }
+	            }
+	        }
+
+	        var views = require('../templates/'+file+'.js');
+
+	        await views.init(req,res,data,commongData);
+
+	      }
+	      else
+	      {
+	        console.error('View template page name must be a javascript file');
+	      }
+	    }
+	    catch(e)
+	    {
+	        if(!hasteObj.res.headersSent)
+	        {
+	          hasteObj.res.writeHead(500,hasteObj.header500);
+	        }
+	        
+	        var readerStream = await readFiles('./error_files/'+config.errorPages.InternalServerError);
+
+	        readerStream.on('error', function(error)
+			{
+		        hasteObj.res.writeHead(404, 'Not Found');
+		       	hasteObj.res.end();
+		    });
+
+	        readerStream.pipe(res);
+
+	        res.on("end",function()
+	        {
+	          readerStream.destroy();
+	        });
+
+	        console.error(e);
+
+	    }
+
+    },
     AllowDirectories:function(path)
     {
 
         // allow folders to get accessed
-
-
-
         hasteObj.staticPath = path;
-
     },
-
-    parseGet: async function(req)
-    {
-      // parse get request
-      return new Promise((resolve,reject)=>{
-        var url_parsed = url_module.parse(hasteObj.request.url,true);
-
-        resolve({status:true,data:url_parsed['query']});  
-      });
-    },
-
-    parsePost: async function(req)
-
-    {
-
-      return new Promise((resolve,reject)=>{
-        if(typeof(hasteObj.request.headers['content-type']) != 'undefined')
-
-        {
-
-          // parse post request 
-
-
-
-          if((hasteObj.request.method == 'POST' &&  hasteObj.request.headers['content-type'].match(/(multipart\/form\-data\;)/g)))
-          {
-
-            try
-
-            {
-
-              const multiparty = require('multiparty');
-
-              var form = new multiparty.Form();
-
-              form.parse(req,function(err,fields,files)
-
-              {
-
-                var bindkey = {
-
-                  fields:fields,
-
-                  files:files
-
-                };
-
-                resolve({status:true,data:bindkey});
-
-              });
-
-            }
-
-            catch(e)
-
-            {
-              resolve({status:false});
-              console.error('Please install multiparty {npm install multiparty}');
-
-            }
-
-          }
-
-          else
-
-          {
-
-            var body = '';
-
-            hasteObj.request.on('data',function(data)
-
-            {
-
-              body += data;
-
-            });
-
-            hasteObj.request.on('end',function()
-
-            {
-
-              if(hasteObj.request.headers['content-type'] == 'application/json')
-
-              {
-                try
-                {
-                  var jsonData = JSON.parse(body);
-                  resolve({status:true,data:jsonData});
-                }
-                catch(e)
-                {
-                  resolve({status:false});
-                }
-              }
-
-              else
-
-              {
-                resolve({status:true,data:qs.parse(body)});
-
-              }
-
-            });
-
-          }
-
-        }
-      });
-    },
-
     close:function()
-
     {
 
         // closing the haste object
 
-
-
-        exports.__init__ = null;
+        exports.init = null;
 
         delete hasteObj;
 
@@ -1918,6 +353,10 @@ haste.fn = Library.prototype =
         delete this.haste;
 
         delete this.staticPath;
+
+        delete this.globalGETObject;
+
+        delete this.globalPOSTObject;
 
         delete this.globalObject;
 
@@ -1934,1654 +373,1289 @@ haste.fn = Library.prototype =
         delete this.cookieStatus;
 
     },
-
     webSocket:function(input,callback)
-
     {
 
         // method for realtime application using websocket.io and sending data to controller
 
-
-
         if(typeof(input["cortex"]) != 'undefined' && typeof(input["cortex"]) == 'string' && input["cortex"] != '')
-
         {
-
             fs.stat('./controllers/'+input["cortex"]+'.js',function(err,data)
-
             {
-
                 if(err)
-
                 {
-
+                	callback(false);
                     console.error('controller does not exists');
-
-                    throw err;
-
                 }
-
-
 
                 var controller = require('../controllers/'+input["cortex"]+'.js');
 
-                var callbackData = controller.main(null,null,input);
+                var callbackData = controller.init(null,null,input);
 
                 callback(callbackData);
 
             });
 
         }   
-
         else
-
         {
-
+        	callback(false);
             console.error('cortex field must be string');
-
-            callback(false);
-
         }
-
-
 
         return this;
 
     }
 };
 
-
-
-
-
-// method to write logs
-
-
-
-function writeLogs(path,data,callback = null)
-
+async function modules(req,res,hasteObj,obj)
 {
 
-    fs.open(path, 'w', function(err, fd)
-
-    {
-
-        if(err)
-
-        {
-
-            callback({err:err,status:false});
-
-        }
-
-
-
-        fs.write(fd, data,function(err)
-
-        {
-
-            if(err)
-
-            {
-
-                callback({err:err,status:false});
-
-            }
-
-            else
-
-            {
-
-                fs.close(fd, function()
-
-                {
-
-                    callback({msg:'Write successfully',status:true});
-
-                });
-
-            }
-
-        });
-
-    }); 
-
-}
-
-
-
-// method for 401 authorization
-
-
-
-function Authorization(req)
-
-{
-
-    try
-
-    {
-
-        let auth = hasteObj.request.headers['authorization'].split(' ')[1];
-
-        let decodedHeader = new Buffer(auth, 'base64').toString();
-
-        decodedHeader = decodedHeader.split(':');
-
-        return decodedHeader;
-
-    }
-
-    catch(e)
-
-    {
-
-        console.error(e);
-
-        return false;
-
-    }
-
-}
-
-
-
-// getting cookies
-
-
-
-function getCookies(req)
-
-{
-
-    var list = {},rc = hasteObj.request.headers.cookie;
-
-
-
-    rc && rc.split(';').forEach(function( cookie )
-
-    {
-
-        var parts = cookie.split('=');
-
-        list[parts.shift().trim()] = decodeURI(parts.join('='));
-
-    });
-
-
-
-    return list;
-
-}
-
-
-
-// setting cookies
-
-
-
-function setCookies(cookies,res)
-
-{
-
-    var list = [ ];
-
-    for (var key in cookies)
-
-    {
-
-        list.push(key + '=' + encodeURIComponent(cookies[key]));
-
-    }
-
-
-
-    hasteObj.cookieStatus = list.join('; ');
-
-    return {"Set-Cookie":list.join('; ')};
-
-}
-
-
-
-// getting userAgents browser details
-
-
-
-function getUserAgent(req)
-
-{
-
-    try
-
-    {
-
-        if(typeof(hasteObj.request.headers['user-agent']) != 'undefined' && hasteObj.request.headers['user-agent'] != '')
-
-        {
-
-            return hasteObj.request.headers['user-agent'];
-
-        }
-
-        else
-
-        {
-
-            return null;
-
-        }
-
-    }
-
-    catch(e)
-
-    {
-
-        console.error(e);
-
-        process.exit();
-
-    }
-
-}
-
-
-
-// send response for 401 authorization
-
-
-
-function sendAuthorization(msg,res)
-
-{
-
-    try
-
-    {
-        if(!hasteObj.response.headersSent)
-        {
-          hasteObj.response.writeHead(401,{
-            'Keep-Alive':' timeout=5, max=500',
-            'Server': 'Node Server',
-            'Developed-By':'Pounze It-Solution Pvt Limited',
-            'Content-Type':'text/html',
-            'WWW-Authenticate':'Basic realm="'+msg+'"'
-          });
-        }
-        
-
-
-
-        var readerStream = fs.createReadStream('./error_files/'+config.errorPages.NotAuthorized);
-
-        readerStream.pipe(res);
-        res.on("end",function()
-        {
-          readerStream.destroy();
-        });
-
-    }
-
-    catch(e)
-
-    {
-
-        console.error(e);
-
-        process.exit();
-
-    }
-
-}
-
-
-
-// checking for 401 authorization username and password
-
-
-
-function checkAuth(req)
-
-{
-
-    if(typeof(hasteObj.request.headers['authorization']) == 'undefined')
-
-    {
-
-        return false;
-
-    }
-
-    else
-
-    {
-
-        return true;
-
-    }
-
-}
-
-
-
-function renderPage(Render,req,res,page,code = null,headers = null,compression = null)
-
-{
-  // zip compression
-
-  if(compression != null)
+  try
   {
-    hasteObj.response.setHeader('content-encoding','gzip');
-  }
+  	/*
 
-    /*
+        checking for middleware if array or string 
 
-    It checks for array if find and replace is array or not
+        if array then multiple middleware
 
-  */
+        else single middleware
 
+    */
 
+    var success = 0;
 
-  if(typeof(Render) == 'object' && !Array.isArray(Render))
-
-  {
-
-    try
-
+    if(typeof(hasteObj.globalObject[obj]["middleware"]) != 'undefined')
     {
-
-
-
-      /*
-
-        Checks for file existence using synchronous file reader
-
-      */
-
-
-
-      var stat = fs.statSync('./views/'+page+'.html');
-
-      var data = '';
-
-      var regexData;
-
-
-
-      /*
-
-        verifies if its file or directory
-
-      */
-
-
-
-      if(stat.isFile())
-
-      {
-
-        var modifiedDate = new Date(stat.mtimeMs).getTime();
-
-        /*
-
-          If it is file then readstream
-
-        */
-
-        
-
-        var readerStream = fs.createReadStream('./views/'+page+'.html');
-
-        readerStream.on('data',function(chunk)
-
+        if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'object' && Array.isArray(hasteObj.globalObject[obj]["middleware"]))
         {
+            let middlewareLen = hasteObj.globalObject[obj]["middleware"].length;
 
-          data += chunk;
-
-          // activating zip compression for html pages, javascript, images, and css   
-
-        });
-
-
-
-        /*
-
-          readstream on end method
-
-        */
-
-
-
-        readerStream.on('end',function()
-        {
-          /*
-
-            find string and replacing it
-
-          */
-
-          for(var key in Render)
-          { 
-            regexData = new RegExp(key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'),"g");
-            data = data.replace(regexData, Render[key]);
-          }
-
-          if(headers == null)
-
+            for(var j=0;j<middlewareLen;j++)
             {
 
-                if(!hasteObj.response.headersSent)
-                {
-                  hasteObj.response.setHeader("Keep-Alive","timeout=5, max=500");
-                  hasteObj.response.setHeader("Server","Node Server");
-                  hasteObj.response.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
-                  hasteObj.response.setHeader('Content-Length',data.length);
-                  hasteObj.response.setHeader('Content-Type','text/html; charset=UTF-8');
-                }
+              // iterating thoough the middleware
 
-                if(hasteObj.cookieStatus)
-                {
-                  hasteObj.response.setHeader("Set-Cookie",hasteObj.cookieStatus);
-                }
-
-
-                if(hasteObj.maintainanceStat != config.server.maintainance)
-                {
-                  hasteObj.maintainanceStat = config.server.maintainance;
-                  hasteObj.response.statusCode = 200;
-                }
-                else
-                {
-                  if(typeof(hasteObj.request.headers['if-modified-since']) == 'undefined')
-                  {
-                    hasteObj.response.statusCode = 200;
-                  }
-                  else
-                  {
-                    hasteObj.response.setHeader('Last-Modified',modifiedDate);
-                    if(hasteObj.request.headers['if-modified-since'] < modifiedDate)
-                    {
-                      hasteObj.response.statusCode = 200;
-                    }
-                    else
-                    {
-                      hasteObj.response.statusCode = 304;
-                    }
-                  }
-                }
-            }
-            else
-            {
-              hasteObj.response.writeHead(code,headers);
-
-            }
-
-            if(compression != null)
-            {
-              var zlib = require('zlib');
-              zlib.gzip(data, function (_, result)
-              { 
-                hasteObj.response.write(result);
-                hasteObj.response.end();    
-
-                hasteObj.response.on("end",function()
-                {
-                  readerStream.destroy();
-                }); 
-                            
-              });
-            }
-            else
-            {
-              hasteObj.response.end(data);
-              hasteObj.response.on("end",function()
+              try
               {
-                readerStream.destroy();
-              });     
-            }
+                // checking if the middleware file exists or not
 
-        });
+                var middlewarestat = await fileStat('./middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
+                
+                // if the middleware is a file
 
-
-
-        readerStream.on('error',function()
-
-        {
-          readerStream.destroy();     
-          if(!hasteObj.response.headersSent)
-          {
-            hasteObj.response.writeHead(404,{
-              'Keep-Alive':' timeout=5, max=500',
-              'Server': 'Node Server',
-              'Developed-By':'Pounze It-Solution Pvt Limited',
-              'Cache-Control':'public,max-age=31536000',
-              'Pragma': 'public,max-age=31536000'
-           });
-          }
-         
-
-          var readerStream = fs.createReadStream('./error_files/'+config.errorPages.PageNotFound);
-
-          readerStream.pipe(res);
-
-          res.on("end",function()
-          {
-            readerStream.destroy();
-          }); 
-
-        });
-
-      }
-
-      else
-
-      {
-
-        console.error('View template page name must be a javascript file');
-
-      }
-
-    }
-
-    catch(e)
-
-    {
-        if(!hasteObj.response.headersSent)
-        {
-          hasteObj.response.writeHead(500,{
-            'Keep-Alive':' timeout=5, max=500',
-            'Server': 'Node Server',
-            'Developed-By':"Pounze It-Solution Pvt Limited",
-            'Cache-Control':'public,max-age=31536000',
-            'Pragma': 'public,max-age=31536000'
-          });
-        }
-        
-
-
-
-        var readerStream = fs.createReadStream('./error_files/'+config.errorPages.InternalServerError);
-
-        readerStream.pipe(res);
-
-        res.on("end",function()
-        {
-          readerStream.destroy();
-        });
-
-      console.error(e);
-
-    }
-
-  }
-
-  else
-
-  {
-
-    console.error('Render variable must be an object');
-
-  }
-
-}
-
-
-
-// method to copy file from temp folder use for file uploading
-
-
-
-function fileCopy(path,pathDir,callback)
-
-{
-
-    fs.readFile(path,function(error, data)
-
-    {
-
-      fs.writeFile(pathDir,data,function(error)
-
-      {
-
-        if(error)
-
-        {
-
-          throw error;
-
-          callback(false);
-
-        }
-
-        callback(true);
-
-      });
-
-    });
-
-    callback(true);
-
-}
-
-
-
-// filereader to read  files in buffers
-
-
-
-function fileReader(path,callback)
-
-{
-
-    var data = '';
-
-    readerStream = fs.createReadStream(path);
-
-
-
-    readerStream.on('data',function(chunk)
-
-    {
-
-      data += chunk;
-
-    });
-
-
-
-    readerStream.on('end',function()
-
-    {
-
-      callback(data);
-
-      readerStream.destroy();
-
-    });
-
-
-
-    readerStream.on('error',function()
-
-    {
-
-      callback('Failed to get content');
-
-      readerStream.destroy();
-
-    });
-
-}
-
-
-
-// formatting dates
-
-
-
-function formatDate(date,callback)
-
-{
-
-    month = '' + (date.getMonth() + 1),
-
-    day = '' + date.getDate(),
-
-    year = date.getFullYear(),
-
-    hour = date.getHours(),
-
-    min = date.getMinutes(),
-
-    sec = date.getSeconds();
-
-
-
-    if (month.length < 2) month = '0' + month;
-
-    if (day.length < 2) day = '0' + day;
-
-    if (hour.length < 2) hour = '0' + hour;
-
-    if (min.length < 2) min = '0' + min;
-
-    if (sec.length < 2) sec = '0' + sec;
-
-
-
-    callback([year, month, day].join('-')+' '+hour+':'+min+':'+sec);
-
-}
-
-
-
-// hash method to encypt data
-
-
-
-function Hash(method,string,encoding)
-
-{
-    var crypto = require('crypto');
-
-    var hash = '';
-
-    if(method == 'sha256')
-
-    {
-
-      if(encoding == 'hex')
-
-      {
-
-        hash = crypto.createHash('sha256').update(string).digest('hex');
-
-      }
-
-      else if(encoding == 'base64')
-
-      {
-
-        hash = crypto.createHash('sha256').update(string).digest('base64');
-
-      }
-
-    }
-
-    else if(method == 'sha512')
-
-    {
-
-      const key = 'IgN!TiOn11!1234567890!@#$%^&*()';
-
-      if(encoding == 'hex')
-
-      {
-
-        hash = crypto.createHmac('sha512', key).update(string).digest('hex');
-
-      }
-
-      else if(encoding == 'base64')
-
-      {
-
-        hash = crypto.createHmac('sha512', key).update(string).digest('base64');
-
-      }
-
-    }
-
-    else if(method == 'sha1')
-
-    {
-
-      if(encoding == 'hex')
-
-      {
-
-        hash = crypto.createHash('sha1').update(string).digest('hex');
-
-      }
-
-      else if(encoding == 'base64')
-
-      {
-
-        hash = crypto.createHash('sha1').update(string).digest('base64');
-
-      }
-
-    }
-
-    else if(method == 'md5')
-
-    {
-
-      if(encoding == 'hex')
-
-      {
-
-        hash = crypto.createHash('md5').update(string).digest('hex');
-
-      }
-
-      else if(encoding == 'base64')
-
-      {
-
-        hash = crypto.createHash('md5').update(string).digest('base64');
-
-      }
-
-    }
-
-    else
-
-    {
-
-      hash = 'Please select a valid hashing method';
-
-    } 
-
-
-
-    return hash;
-
-}
-
-
-
-// method to make http client request to other server
-
-
-
-function RemoteRequest(params,callback)
-
-{
-
-    var postData = '';
-
-    var data = '';
-
-    if(params.protocol == 'http')
-
-    {
-
-      const http = require('http');
-
-      if(typeof(params.message) != 'undefined')
-
-      {
-
-        postData = params.message;
-
-      }
-
-
-
-
-
-      var req = http.request(params.options,function(res)
-
-      {
-
-        // on data event is fired call back is append into data variable
-
-        res.on('data', function(chunk)
-
-        {
-
-           data += chunk;
-
-        });
-
-        // after ending the request
-
-        res.on('end',function()
-
-        {
-
-          callback(data);
-
-           // console.error('No more data in response.');
-
-        });
-
-      });
-
-
-
-      req.on('error',function(e)
-
-      {
-
-        console.error(`problem with request: ${e.message}`);
-
-      });
-
-
-
-      // write data to request body
-
-      req.write(JSON.stringify(postData));
-
-      req.end();
-
-    }
-
-
-
-    if(params.protocol == 'https')
-
-    {
-
-      const https = require('https');
-
-      if(typeof(params.message) != 'undefined')
-
-      {
-
-        postData = params.message;
-
-      }
-
-
-
-      var req = https.request(params.options,function(res)
-
-      {
-
-        // on data event is fired call back is append into data variable
-
-        res.on('data', function(chunk)
-
-        {
-
-           data += chunk;
-
-        });
-
-        // after ending the request
-
-        res.on('end',function()
-
-        {
-
-          callback(data);
-
-           // console.error('No more data in response.');
-
-        });
-
-      });
-
-
-
-      req.on('error',function(e)
-
-      {
-
-        console.error(`problem with request: ${e.message}`);
-
-      });
-
-
-
-      // write data to request body
-
-
-
-      req.write(JSON.stringify(postData));
-
-      req.end();
-
-
-
-    }
-
-}
-
-
-
-/*
-
-    mysql object for executing mysql queries
-
-
-
-*/
-
-
-
-let mySQL = {
-
-    poolQuery:function(parameters,callback)
-    {
-
-        const mysql = require('mysql');
-
-        if(parameters.match == '' || typeof(parameters.match) == 'undefined')
-
-        {
-
-            var queryString = '';
-
-        }
-
-        else
-
-        {
-
-            var queryString = parameters.match;
-
-        }
-
-
-
-        const pool = mysql.createPool({
-
-            connectionLimit: 2000, //important
-
-            host: config.mySQL.host,
-
-            user: config.mySQL.username,
-
-            password: config.mySQL.password,
-
-            database: config.mySQL.db,
-
-            debug: false
-
-        });
-
-
-
-        pool.getConnection(function(error, connection)
-
-        {
-
-            if (error)
-
-            {
-
-                connection.release();
-
-                //throw erroror;
-
-                callback(error,null);
-
-                return false;
-
-            }
-
-
-
-            if(queryString != '')
-
-            {
-
-                connection.query(parameters.query,[queryString], function(error, rows, fields)
-
+                if(middlewarestat != undefined && middlewarestat.isFile())
                 {
+                    // then invoke the middleware main method
 
-                    if (error)
+                  var middlewareFile = require('../middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
 
-                    {
+                  var middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
 
-                        connection.release();
+                  if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
+                  {
 
-                        //throw erroror;
+                    // if middleware callback is false then request is stopped here
 
-                        callback(error,null);
+                    hasteObj.res.setHeader('Content-Type','application/json');
 
-                        return false;
-
-                    }
-
-                    connection.release();
-
-                    callback(error,rows);
-
-                });
-
-            }
-
-            else
-
-            {
-
-                connection.query(parameters.query, function(error, rows, fields)
-
-                {
-
-                    if (error)
-
-                    {
-
-                        connection.release();
-
-                        //throw erroror;
-
-                        callback(error,null);
-
-                        return false;
-
-                    }
-
-
-
-                    connection.release();
-
-                    callback(error,rows);
-
-                });
-
-            }
-
-        });
-
-    },
-
-    BulkQuery:function(parameters,callback)
-
-    {
-
-        const mysql = require('mysql');
-
-        if(parameters.match == '' || typeof(parameters.match) == 'undefined')
-
-        {
-
-            var queryString = '';
-
-        }
-
-        else
-
-        {
-
-            var queryString = parameters.match;
-
-        }
-
-
-
-        const connection = mysql.createConnection({
-
-            host: config.mySQL.host,
-
-            user: config.mySQL.username,
-
-            password: config.mySQL.password,
-
-            database: config.mySQL.db
-
-        });
-
-
-
-        connection.connect(function(error){
-
-            if(error)
-
-            {
-
-                callback(error,null);
-
-            }
-
-        }); 
-
-
-
-        // if you want to start transaction processing system
-
-
-
-        if(parameters.transaction == true && typeof(parameters.transaction) != 'undefined')
-
-        {
-
-            connection.beginTransaction(function(error){
-
-                if(error)
-
-                {   
-
-                    callback(error,null);
-
-                }
-
-            });
-
-            if(queryString != '')
-
-            {
-
-                connection.query(parameters.query,[queryString],function(error,rows,fields){
-
-                    if(error)
-
-                    {
-
-                        connection.rollback(function(){
-
-                            callback(error,null);
-
-                        });
-
-                        return false;
-
-                    }
-
-                    connection.commit(function(error){
-
-                        if (error) { 
-
-                          connection.rollback(function() {
-
-                            callback(error,null);
-
-                          });
-
-                        }
-
-                        connection.end();
-
-                        
-
-                    });
-
-                    connection.on('end',function()
-
-                    {
-
-                        callback(error,rows);
-
-                    });
-
-                });
-
-            }
-
-            else
-
-            {
-
-                connection.query(parameters.query,function(error,rows,fields){
-
-                    if(error)
-
-                    {
-
-                        connection.rollback(function(){
-
-                            callback(error,null);
-
-                        });
-
-                        return false;
-
-                    }
-
-                    connection.commit(function(error){
-
-                        if (error) { 
-
-                          connection.rollback(function() {
-
-                            callback(error,null);
-
-                          });
-
-                        }
-
-                        connection.end();
-
-                        
-
-                    });
-
-                    connection.on('end',function()
-
-                    {
-
-                        callback(error,rows);
-
-                    });
-
-                });
-
-            }
-
-        }
-
-        else
-
-        {
-
-            // else without transaction processing system
-
-            
-
-            if(queryString != '')
-
-            {
-
-                connection.query(parameters.query,[queryString],function(error,rows,fields){
-
-                    if(error)
-
-                    {
-
-                        callback(error,null);
-
-                        return false;
-
-                    }
-
-                    connection.end();
-
-                    connection.on('end',function()
-
-                    {
-
-                        callback(error,rows);
-
-                    });
-
-                });
-
-            }
-
-            else
-
-            {
-
-                connection.query(parameters.query,function(error,rows,fields){
-
-                    if(error)
-
-                    {
-
-                        callback(error,null);
-
-                        return false;
-
-                    }
-
-                    connection.end();
-
-                    connection.on('end',function()
-
-                    {
-
-                        callback(error,rows);
-
-                    });
-
-                });
-
-            }
-
-        }
-
-    },
-
-    query:function(parameters,callback)
-
-    {
-
-        const mysql = require('mysql');
-
-        if(parameters.match == '' || typeof(parameters.match) == 'undefined')
-
-        {
-
-            var queryString = '';
-
-        }
-
-        else
-
-        {
-
-            var queryString = parameters.match;
-
-        }
-
-
-
-        const connection = mysql.createConnection({
-
-            host: config.mySQL.host,
-
-            user: config.mySQL.username,
-
-            password: config.mySQL.password,
-
-            database: config.mySQL.db
-
-        });
-
-
-
-        connection.connect(function(error)
-
-        {
-
-            if(error)
-
-            {
-
-                callback(error,null);
-
-                return false;
-
-            }
-
-        }); 
-
-
-
-        if(parameters.transaction == true && typeof(parameters.transaction) != 'undefined')
-
-        {
-
-            connection.beginTransaction(function(error)
-
-            {
-
-                if(error)
-
-                {   
-
-                    callback(error,null);
+                    hasteObj.res.end(JSON.stringify(middlewareCallbacks[1]));
 
                     return false;
 
+                  }
+                  else
+                  {
+                    hasteObj.input[hasteObj.globalObject[obj]["middleware"][j]] = middlewareCallbacks[1];
+                    success += 1;
+                  }
                 }
-
-            });
-
-            if(queryString != '')
-
-            {
-
-                connection.query(parameters.query,queryString,function(error,rows,fields){
-
-                    if(error)
-
-                    {
-
-                        connection.rollback(function(){
-
-                            callback(error,null);
-
-                        });
-
-                        return false;
-
-                    }
-
-                    connection.commit(function(err)
-
-                    {
-
-                        if (error)
-
-                        { 
-
-                          connection.rollback(function()
-
-                          {
-
-                            callback(error,null);
-
-                          });
-
-                        }
-
-                        connection.end();
-
-                        
-
-                    });
-
-                    connection.on('end',function()
-
-                    {
-
-                        callback(error,rows);
-
-                    });
-
-                });
-
-            }
-
-            else
-
-            {
-
-                connection.query(parameters.query,function(error,rows,fields)
-
+                else
                 {
+                  console.error('Middlware must be a javascript file');
+                }
+              }
+              catch(e)
+              {
+                // if file is not found of the middleware then 500 internal server error is thrown
 
-                    if(error)
+                if(!hasteObj.res.headersSent)
+                {
+                  hasteObj.res.writeHead(500,hasteObj.header500);
+                }
+                
+                var readerStream = await readFiles('./error_files/'+config.errorPages.InternalServerError);
 
-                    {
+                readerStream.on('error', function(error)
+			    {
+		            hasteObj.res.writeHead(404, 'Not Found');
+		        	hasteObj.res.end();
+		        });
 
-                        connection.rollback(function()
+                readerStream.pipe(res);
 
-                        {
-
-                            callback(error,null);
-
-                        });
-
-                        return false;
-
-                    }
-
-                    connection.commit(function(error)
-
-                    {
-
-                        if (error)
-
-                        { 
-
-                          connection.rollback(function()
-
-                          {
-
-                            callback(error,null);
-
-                          });
-
-                        }
-
-                        connection.end();
-
-                        
-
-                    });
-
-                    connection.on('end',function()
-
-                    {
-
-                        callback(error,rows);
-
-                    });
-
+                res.on("end",function()
+                {
+                  readerStream.destroy();
                 });
 
+                console.error(e);
+                return false;
+
+              }
             }
 
+            if(success == middlewareLen)
+            {
+              	executeMethod(req,res,hasteObj,obj).catch(function(error)
+      			{
+      				console.error(error);
+      			});
+            }
         }
-
-        else
-
+        else if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'string')
         {
+            let middlewarestat = await fileStat('./middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
 
-            // else without transaction processing system
-
-        
-
-            if(queryString != '')
-
+            if(middlewarestat != undefined && middlewarestat.isFile())
             {
 
-                connection.query(parameters.query,queryString,function(error,rows,fields)
+              let middlewareFile = require('../middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
 
-                {
+              let middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input).catch(function(err)
+              {
+              	console.error(err);
+              });
 
-                    if(error)
-
-                    {
-
-                        callback(error);
-
-                        return false;
-
-                    }
-
-                    connection.end();
-
-                    connection.on('end',function()
-
-                    {
-
-                        callback(error,rows);
-
-                    });
-
-                });
-
+              if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
+              {
+                hasteObj.res.setHeader('Content-Type','application/json');
+                hasteObj.res.end(JSON.stringify(middlewareCallbacks[1]));
+                return false;
+              }
+              else
+              {
+                hasteObj.input[hasteObj.globalObject[obj]["middleware"]] = middlewareCallbacks[1];
+                executeMethod(req,res,hasteObj,obj).catch(function(error)
+      			{
+      				console.error(error);
+      			});
+              }
             }
-
             else
-
             {
-
-                connection.query(parameters.query,function(error,rows,fields)
-
-                {
-
-                    if(error)
-
-                    {
-
-                        callback(error);
-
-                        return false;
-
-                    }
-
-                    connection.end();
-
-                    connection.on('end',function()
-
-                    {
-
-                        callback(error,rows);
-
-                    });
-
-                });
-
+              console.error('Middlware must be a javascript file');
             }
-
         }
+        else
+        {
+            console.error("Middleware must be string or array");
+        }
+    }  
+    else
+    {
+        executeMethod(req,res,hasteObj,obj).catch(function(error)
+		{
+			console.error(error);
+		});
+    }
+  }
+  catch(e)
+  {
+  	console.error(e);
+  }   
+}
+
+async function executeMethod(req,res,hasteObj,obj)
+{
+
+  /*
+    checking if the second argument is string or function
+
+    if string then it is passed to 
+
+    else callback is given to method
+
+  */
+
+  if(typeof(hasteObj.globalObject[obj]["argument"]) == 'function')
+  {
+    hasteObj.globalObject[obj]["argument"](req,res,hasteObj.input);
+  }
+  else if(typeof(hasteObj.globalObject[obj]["argument"]) == 'string')
+  {
+    try
+    {
+
+     var stat = await fileStat('./controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
+
+     if(stat.isFile())
+     {
+        var controller = require('../controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
+
+        controller.init(req,res,hasteObj.input).catch(function(err)
+        {
+        	console.error(err);
+        });
+     }
+     else
+     {
+        console.error('Controller must me a javascript file');
+   	  }
 
     }
+    catch(e)
+    {
+      console.error(e);
 
-};
+      if(!hasteObj.res.headersSent)
+      {
+        hasteObj.res.writeHead(500,hasteObj.header500);
+      }
+     
+      var readerStream = await readFiles('./error_files/'+config.errorPages.InternalServerError);
 
+      readerStream.on('error', function(error)
+	  {
+        hasteObj.res.writeHead(404, 'Not Found');
+       	hasteObj.res.end();
+      });
+
+      readerStream.pipe(res);
+
+      res.on("end",function()
+      {
+        readerStream.destroy();
+      });
+
+      console.error(e);
+      
+      return false;
+    }
+  }
+  else
+  {
+    console.error('Route\'s second argument must me function of string ' + typeof(hasteObj.argument[i]) + ' given');
+  }
+
+}
+
+async function executeModules()
+{
+	if(hasteObj.dependencies["multiparty"] != undefined)
+	{
+		this.AllowModules.multiparty = require("multiparty");
+	}
+
+	if(config.compression != undefined && config.compression.gzip != undefined && config.compression.gzip == false)
+	{
+		this.AllowModules.zlib = require('zlib');
+	}
+}
+
+async function handleHttpsServer(ip,port,options,callback)
+{
+	return new Promise((resolve,reject)=>{
+
+		try
+		{
+			if(typeof(ip) != 'string' || typeof(port) != 'number')
+			{
+				console.error("IP and PORT cannot be empty",null);
+			}
+
+			var cpuCount = null;
+
+			if(cluster.isMaster)
+			{
+				if(typeof(config.server.cpuCores) != 'undefined' && typeof(config.server.cpuCores) == 'number')
+		        {
+		           cpuCount = config.server.cpuCores;
+		        }
+		        else
+		        {
+		           cpuCount = require('os').cpus().length;
+		        }
+
+		        for(var i=0;i<cpuCount;i++)
+		        {
+		            cluster.fork();
+		        }
+
+		        cluster.on('exit',()=>{
+		           cluster.fork();
+		        });
+			}
+			else
+			{
+				hasteObj.server = https.createServer(options);
+
+				hasteObj.server.on('request', (req, res) => {
+				  	process.nextTick(function()
+					{
+						handleRequest(req,res);
+					});
+				});
+
+				/*
+		            Http server configurations
+		        */
+
+		        hasteObj.server.on('connection',function(socket)
+		        { 
+		           socket.setTimeout(config.server.socketTimeout);
+		        });
+
+		        hasteObj.server.setTimeout(config.server.setTimeout);
+
+		        hasteObj.server.setMaxListeners(config.server.maxListeners);
+
+		        hasteObj.server.on('clientError', (err, socket) => {
+		           socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+		        });
+
+		        /*
+
+		           Server listening and closing the server
+
+		        */
+
+		       	hasteObj.server.listen(port,ip);
+
+		        if(callback == null)
+		        {
+		        	resolve(hasteObj.server);
+		        }
+		        else
+		        {
+		        	callback(hasteObj.server);
+		        }
+			}
+		}
+		catch(e)
+		{
+			reject(e);
+		}
+	});
+}
+
+async function handleHttpServer(ip,port,callback)
+{
+	return new Promise((resolve,reject)=>{
+
+		try
+		{
+			if(typeof(ip) != 'string' || typeof(port) != 'number')
+			{
+				console.error("IP and PORT cannot be empty",null);
+			}
+
+			var cpuCount = null;
+
+			if(cluster.isMaster)
+			{
+				if(typeof(config.server.cpuCores) != 'undefined' && typeof(config.server.cpuCores) == 'number')
+		        {
+		           cpuCount = config.server.cpuCores;
+		        }
+		        else
+		        {
+		           cpuCount = require('os').cpus().length;
+		        }
+
+		        for(var i=0;i<cpuCount;i++)
+		        {
+		            cluster.fork();
+		        }
+
+		        cluster.on('exit',()=>{
+		           cluster.fork();
+		        });
+			}
+			else
+			{
+				hasteObj.server = http.createServer();
+
+				hasteObj.server.on('request', (req, res) => {
+				  	process.nextTick(function()
+					{
+						handleRequest(req,res);
+					});
+				});
+
+				/*
+		            Http server configurations
+		        */
+
+		        hasteObj.server.on('connection',function(socket)
+		        { 
+		           socket.setTimeout(config.server.socketTimeout);
+		        });
+
+		        hasteObj.server.setTimeout(config.server.setTimeout);
+
+		        hasteObj.server.setMaxListeners(config.server.maxListeners);
+
+		        hasteObj.server.on('clientError', (err, socket) => {
+		           socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+		        });
+
+		        /*
+
+		           Server listening and closing the server
+
+		        */
+
+		       	hasteObj.server.listen(port,ip);
+
+		        if(callback == null)
+		        {
+		        	resolve(hasteObj.server);
+		        }
+		        else
+		        {
+		        	callback(hasteObj.server);
+		        }
+			}
+		}
+		catch(e)
+		{
+			reject(e);
+		}
+	});
+}
+
+async function getIpAddress(req,res)
+{
+    /*
+
+        Requiring IP address to get use ip address 
+
+    */
+
+    let getIpObject = require('../blockusers/IpAddress.js');
+
+    let ip;
+
+    if (hasteObj.req.headers['x-forwarded-for'])
+    {
+        ip = hasteObj.req.headers['x-forwarded-for'].split(",")[0];
+    }
+    else if(hasteObj.req.connection && hasteObj.req.connection.remoteAddress)
+    {
+        ip = hasteObj.req.connection.remoteAddress;
+    } 
+    else
+    {
+        ip = hasteObj.req.ip;
+    }
+
+    /*
+        matching the ip address and status
+    */
+
+    if(getIpObject[ip])
+    {
+        if(!hasteObj.res.headersSent)
+        {
+          hasteObj.res.writeHead(404,hasteObj.header404);
+        }
+
+        hasteObj.res.end('Something went wrong');
+        return false;
+    }
+}
+
+async function defaultHeaders(statuCode,headers)
+{
+	if(!hasteObj.res.headersSent)
+	{
+		hasteObj.res.writeHead(statuCode,headers);
+	}
+}
+
+async function handleRequest(req,res)
+{
+	try
+	{
+		if(typeof(defaultMethod) != 'undefined')
+      	{
+        	defaultMethod(req,res);
+      	}
+
+		hasteObj.req = req;
+	    hasteObj.res = res;
+
+	    session.currentSession = '';
+
+	    getIpAddress(hasteObj.req,hasteObj.res);
+
+	    var heapUsuage = data = null;
+
+	    heapUsuage = process.memoryUsage();
+
+	    if(config.server.showHeapUsuage)
+	    {
+	     	console.error('Heap used '+heapUsuage['heapUsed'] +' | Heap total size: '+heapUsuage['heapTotal']);
+	    }
+
+	    if(heapUsuage['heapUsed'] > heapUsuage['heapTotal'])
+	    {
+	      data = {
+	        status:false,
+	        msg:'Server is to busy'
+	      };
+	      hasteObj.res.end(JSON.stringify(data));
+	    }
+
+	    hasteObj.req.on('error',function()
+	    {
+	      console.error('Error in server');
+	      return false;
+	    });
+
+	    hasteObj.req.on("end", function()
+	    {
+	      // request ended normally
+	    });
+
+	    if(config.server.maintainance)
+	    {
+	      if(!hasteObj.res.headersSent)
+	      {
+	        hasteObj.res.setHeader("Keep-Alive","timeout=5, max=500");
+	        hasteObj.res.setHeader("Server","Node Server");
+	        hasteObj.res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+	        hasteObj.res.setHeader("Content-Type","text/html");
+	      }
+	      
+	      var stat = await fileStat('./error_files/'+config.errorPages.MaintainancePage);
+
+	      if(stat == undefined)
+	      {
+	      	return;
+	      }
+
+	      var modifiedDate = new Date(stat.mtimeMs).getTime();
+
+	      if(typeof(hasteObj.req.headers['if-none-match']) == 'undefined')
+	      {
+	        hasteObj.res.setHeader('ETag',modifiedDate);
+	        hasteObj.res.statusCode = 200;
+	      }
+	      else
+	      {
+	        hasteObj.res.setHeader('ETag',modifiedDate);
+	        if(hasteObj.req.headers['if-none-match'] != modifiedDate)
+	        {
+	          hasteObj.res.statusCode = 200;
+	        }
+	        else
+	        {
+	          hasteObj.res.statusCode = 304;
+	        }
+	      }
+
+	      var readerStream = await readFiles('./error_files/'+config.errorPages.MaintainancePage);
+
+	      readerStream.on('error', function(error)
+	      {
+            hasteObj.res.writeHead(404, 'Not Found');
+        	hasteObj.res.end();
+          });
+
+	      readerStream.pipe(hasteObj.res);
+
+	      hasteObj.res.on("end",function()
+	      {
+	        readerStream.destroy();
+	      });
+
+	      return false;
+	    }
+
+	  
+        let requestMethod = hasteObj.req.method;
+
+      	let requestUri = url_module.parse(hasteObj.req.url).pathname;
+
+      	let ext = (/[.]/.exec(requestUri)) ? /[^.]+$/.exec(requestUri) : undefined;
+
+      	let myExp;
+
+      	let notMatchCount = 0;
+
+      	let tempMapping = '';
+
+      	let uriListLen = 0;
+
+      	/*
+
+          getting global object length to know if any routes is created
+
+        */
+
+        if(requestMethod == "GET")
+        {
+        	uriListLen = Object.keys(hasteObj.globalGETObject).length;
+
+        	hasteObj.globalObject = hasteObj.globalGETObject;
+        }
+        else if(requestMethod == "POST")
+        {
+        	uriListLen = Object.keys(hasteObj.globalPOSTObject).length;
+
+        	hasteObj.globalObject = hasteObj.globalPOSTObject;
+        }
+
+        /*
+
+          if length is zero error is thrown to created a route
+
+        */
+
+        if(uriListLen == 0)
+        {
+          hasteObj.res.setHeader("Keep-Alive","timeout=5, max=500");
+	      hasteObj.res.setHeader("Server","Node Server");
+		  hasteObj.res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+      	  res.end("Please create a route");
+          console.error('Please create a route');
+          return false;
+        }
+
+      	/*
+	        Cortex Concept for accessing apis more directly and easily
+	    */
+
+	    if(requestUri == '/cortex')
+      	{
+      		if(requestMethod == 'POST')
+      		{
+      			var parseCb = await parsePOST(hasteObj.req).catch(function(error)
+      			{
+      				console.error(error);
+      			});
+      		}
+      		else if(requestMethod == "GET")
+      		{
+      			hasteObj.res.setHeader("Keep-Alive","timeout=5, max=500");
+			    hasteObj.res.setHeader("Server","Node Server");
+			    hasteObj.res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+      			res.end("Cortex method does not support GET request");
+      			console.error("Cortex method does not support GET request");
+      			return;
+      		}
+      		else
+      		{
+      			var parseCb = {
+      				status:false
+      			};
+      		}
+	        
+	        if(parseCb != undefined && parseCb.status)
+	        {
+	          hasteObj.input['requestData'] = parseCb.data;
+
+	          try
+	          {
+	            if(requestMethod == 'POST')
+	            {
+	            	var mapping = hasteObj.input['requestData']['mapping'];
+	            	var cortex = hasteObj.input['requestData']['cortex'];
+	            }
+	            else
+	            {
+	            	var mapping = hasteObj.input['query']['mapping'];
+	            	var cortex = hasteObj.input['query']['cortex'];
+	            }
+
+	            if(cortex == undefined || cortex == "" || cortex == null)
+	            {
+	            	console.error("No cortex method found");
+	            	return;
+	            }
+
+	            if(typeof(mapping) != 'undefined' && mapping != '')
+	            {
+	              tempMapping = mapping.split('.');
+	              tempMapping = tempMapping.join('/');
+	            }
+
+	            var stat = await fileStat('./controllers/'+tempMapping+'/'+cortex+'.js');
+
+	            if(stat != undefined && stat.isFile())
+	            {
+	              var controller = require('../controllers/'+tempMapping+'/'+cortex+'.js');
+
+	              controller.init(req,res,hasteObj.input);
+	            }
+	            else
+	            {
+	              console.error('Controller must me a javascript file'); 
+	            }
+
+	          }
+	          catch(e)
+	          {
+
+	            if(!hasteObj.res.headersSent)
+	            {
+	              hasteObj.res.writeHead(404,hasteObj.header404);
+	            }
+	            
+	            var readerStream = await readFiles('./error_files/'+config.errorPages.PageNotFound);
+
+	            readerStream.on('error', function(error)
+		      	{
+		            hasteObj.res.writeHead(404, 'Not Found');
+	            	hasteObj.res.end();
+	          	});
+
+	            readerStream.pipe(res);
+
+	            res.on("end",function()
+	            {
+	              readerStream.destroy();
+	            });
+
+	            console.error(e);
+	            return false;
+
+	          }
+	        }
+	        else
+	        {
+	          hasteObj.res.writeHead(500,hasteObj.header500);
+
+	          hasteObj.res.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
+
+	          return; 
+	        }
+
+	        return false;
+      	}
+
+
+      	/*
+
+        	checking for extention of the request
+
+      	*/
+
+
+
+      	if(ext == undefined)
+      	{
+	        /*
+
+	          if extention is undefined then its url api request else static file request
+
+	        */
+
+	        /*
+
+	          Iterating through the whole object
+
+	        */
+
+	        for(obj in hasteObj.globalObject)
+	        {
+	          /*
+	            Iterating through object in to match uri and parse request accordingly            
+	          */
+
+	            myExp = new RegExp('^'+hasteObj.globalObject[obj]["regex"]+'$');
+
+	            if(requestUri.match(myExp) && requestMethod == hasteObj.globalObject[obj]['request_type'])
+	            {
+	              let requestUriArr = requestUri.split('/');
+
+	              let matchedArr = hasteObj.globalObject[obj]["uri"].split('/');
+
+	              let matchedArrLen = matchedArr.length;
+
+	              for(let mat=1;mat<matchedArrLen;mat++)
+	              {
+	                hasteObj.input[matchedArr[mat]] = requestUriArr[mat];
+	              }
+
+	              switch(requestMethod)
+	              {
+
+	                case "GET":
+
+		                var parseCb = await parseGET(hasteObj.req).catch(function(error)
+		      			{
+		      				console.error(error);
+		      			});
+
+		                if(parseCb != undefined && parseCb.status)
+		                {
+		                    hasteObj.input['requestData'] = parseCb.data;
+
+		                    modules(hasteObj.req,hasteObj.res,hasteObj,obj).catch(function(error)
+			      			{
+			      				console.error(error);
+			      			});
+		                }
+		                else
+		                {
+		                    hasteObj.res.writeHead(500,hasteObj.header500);
+
+		                    hasteObj.res.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
+		                }
+
+		                break;
+
+	                case "POST":
+
+	                  	var parseCb = await parsePOST(hasteObj.req).catch(function(error)
+		      			{
+		      				console.error(error);
+		      			});
+
+	                  	if(parseCb != undefined && parseCb.status)
+		                {
+		                    hasteObj.input['requestData'] = parseCb.data;
+
+		                    modules(hasteObj.req,hasteObj.res,hasteObj,obj).catch(function(error)
+			      			{
+			      				console.error(error);
+			      			});
+		                }
+	                  	else
+	                  	{
+	                    	hasteObj.res.writeHead(500,hasteObj.header500);
+
+	                    	hasteObj.res.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
+	                  	}
+
+	                  	break;
+
+	                default:
+	                	hasteObj.res.writeHead(404,hasteObj.header404);
+	                    hasteObj.res.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
+	                	console.error('Invalid Request');
+	              }
+	              break;
+
+	            }
+	            else
+	            {
+	              notMatchCount += 1;
+	            }
+	        }
+
+
+	        /*
+
+	          If no match is found then 404 error is thrown
+
+	        */
+
+	        if(notMatchCount == uriListLen)
+	        {
+	            if(!hasteObj.res.headersSent)
+	            {
+	              hasteObj.res.writeHead(404,hasteObj.header404);
+	            }
+
+	            var readerStream = await readFiles('./error_files/'+config.errorPages.PageNotFound);
+
+	            readerStream.on('error', function(error)
+		      	{
+		            hasteObj.res.writeHead(404, 'Not Found');
+	            	hasteObj.res.end();
+	          	});
+
+	           readerStream.pipe(hasteObj.res);
+
+	           hasteObj.res.on("end",function()
+	           {
+	             readerStream.destroy();
+	           });
+
+	           return false;
+	        }
+      	}
+      	else
+      	{
+	        try
+	        {
+	          // checking for static files and have access to that folder
+
+	          let staticFilelength = (hasteObj.staticPath == '') ? 0 : hasteObj.staticPath.length;
+
+	          let notMatchCount = 0;
+
+	          for(var i=0; i<staticFilelength; i++)
+	          {
+	            url = hasteObj.staticPath[i].replace('/',"\\/");
+
+	            myExp = new RegExp(url+"[a-z0-9A-Z\.]*","i");
+
+	            if(requestUri.match(myExp))
+	            {
+	              switch(PATHNAME.extname(ext['input']))
+	              {
+	                case '.css': hasteObj.res.setHeader("Content-Type", "text/css");
+
+	                break;
+
+	                case '.ico' : hasteObj.res.setHeader("Content-Type","image/ico");
+
+	                break;
+
+	                case '.js' : hasteObj.res.setHeader("Content-Type", "text/javascript");
+
+	                break;
+
+	                case '.jpeg' : hasteObj.res.setHeader("Content-Type", "image/jpg");
+
+	                break;
+
+	                case '.jpg' : hasteObj.res.setHeader("Content-Type", "image/jpg");
+
+	                break;
+
+	                case '.png' : hasteObj.res.setHeader("Content-Type", "image/png");
+
+	                break;
+
+	                case '.gif' : hasteObj.res.setHeader("Content-Type", "image/gif");
+
+	                break;
+
+	                case '.json' : hasteObj.res.setHeader("Content-Type", "application/json");
+
+	                break;
+
+	                case '.pdf' : hasteObj.res.setHeader("Content-Type", "application/pdf");
+
+	                break;
+
+	                case '.ttf' : hasteObj.res.setHeader("Content-Type", "application/octet-stream");
+
+	                break;
+
+	                case '.html' : hasteObj.res.setHeader("Content-Type", "text/html");
+
+	                break;
+
+	                case '.woff' : hasteObj.res.setHeader("Content-Type", "application/x-font-woff");
+
+	                break;
+
+	                default : 
+	                	hasteObj.res.setHeader("Content-Type", "text/plain");
+	                	continue;
+
+	              }
+
+	              var stat = await fileStat('./'+requestUri);
+
+	              if(stat != undefined && stat.isFile())
+	              {
+	                if(!hasteObj.res.headersSent)
+	                {
+	                	var now = new Date();
+		                now.setDate(now.getDate()+14);
+		                hasteObj.res.setHeader("Keep-Alive","timeout=5, max=500");
+		                hasteObj.res.setHeader("Server","Node Server");
+		                hasteObj.res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+		                hasteObj.res.setHeader("Expires",now);
+
+		                var modifiedDate = new Date(stat.mtimeMs).getTime();
+		                hasteObj.res.setHeader('ETag',modifiedDate);
+	                }
+
+	                if(typeof(hasteObj.req.headers['if-none-match']) == 'undefined')
+	                {
+	                  
+	                  hasteObj.res.statusCode = 200;
+	                }
+	                else
+	                {
+	                  if(hasteObj.req.headers['if-none-match'] != modifiedDate)
+	                  {
+	                    hasteObj.res.statusCode = 200;
+	                  }
+	                  else
+	                  {
+	                    hasteObj.res.statusCode = 304;
+	                  }
+	                }
+
+	                readerStream = await readFiles('./'+requestUri);
+
+	                readerStream.on('error', function(error)
+				    {
+			            hasteObj.res.writeHead(404, 'Not Found');
+		            	hasteObj.res.end();
+			        });
+	                
+	                if(config.compression.gzip == false)
+	                {
+	                  readerStream.pipe(hasteObj.res);
+	                  hasteObj.res.on("end",function()
+	                  {
+	                    readerStream.destroy();
+	                  });
+	                }
+	                else
+	                {
+	                  hasteObj.res.setHeader('content-encoding','gzip');
+	                  readerStream.pipe(hasteObj.AllowModules.zlib.createGzip()).pipe(hasteObj.res);
+	                  hasteObj.res.on("end",function()
+	                  {
+	                    readerStream.destroy();
+	                  });
+	                }
+	              }
+	              else
+	              {
+	                if(!hasteObj.res.headersSent)
+	                {
+	                  hasteObj.res.writeHead(404,hasteObj.header404);
+	                }
+	                
+	                var readerStream = await readFiles('./error_files/'+config.errorPages.PageNotFound);
+
+	                readerStream.on('error', function(error)
+				    {
+			            hasteObj.res.writeHead(404, 'Not Found');
+		            	hasteObj.res.end();
+			        });
+
+	                readerStream.pipe(hasteObj.res);
+	                hasteObj.res.on("end",function()
+	                {
+	                  readerStream.destroy();
+	                });
+	              }
+
+	              break;
+
+	            }
+	            else
+	            {
+	              notMatchCount += 1;
+	            }
+	          }
+
+	          // if no match found 404 error is thrown
+
+	          if(notMatchCount == staticFilelength)
+	          {
+
+	            if(!hasteObj.res.headersSent)
+	            {
+	              hasteObj.res.writeHead(403,hasteObj.header403);
+	            }
+	            
+	            var readerStream = await readFiles('./error_files/'+config.errorPages.DirectoryAccess);
+
+	            readerStream.on('error', function(error)
+		      	{
+		            hasteObj.res.writeHead(404, 'Not Found');
+	            	hasteObj.res.end();
+	          	});
+
+	            readerStream.pipe(hasteObj.res);
+
+	            hasteObj.res.on("end",function()
+	            {
+	                readerStream.destroy();
+	            });
+
+	            return false;
+	          }
+
+	        }
+	        catch(e)
+	        {
+	          console.error(e);
+	          if(!hasteObj.res.headersSent)
+	          {
+	            hasteObj.res.writeHead(500,hasteObj.header500);
+	          }
+	          
+		      var readerStream = await readFiles('./error_files/'+config.errorPages.InternalServerError);
+
+		      readerStream.on('error', function(error)
+		      {
+	            hasteObj.res.writeHead(404, 'Not Found');
+            	hasteObj.res.end();
+	          });
+
+		      readerStream.pipe(hasteObj.res);
+
+		      hasteObj.res.on("end",function()
+		      {
+		        readerStream.destroy();
+		      });
+
+		      return false;
+	        }
+      	}
+	}
+	catch(e)
+	{
+		console.error(e);
+	}
+}
+
+async function readFiles(fileName)
+{
+	return new Promise((resolve,reject)=>{
+		try
+		{
+			var readerStream = fs.createReadStream(fileName);
+    		resolve(readerStream);
+		}
+		catch(e)
+		{
+			reject(e);
+			console.error(e);
+		}
+	});
+}
+
+async function parseGET(req)
+{
+  // parse get request
+  return new Promise((resolve,reject)=>{
+    try
+    {
+    	var url_parsed = url_module.parse(hasteObj.req.url,true);
+    	resolve({status:true,data:url_parsed['query']});  
+    }
+    catch(e)
+    {
+    	console.error(e);
+    	reject({status:false,msg:"Failed to parse get request"});
+    	console.error("Failed to parse get request");
+    }
+  });
+}
+
+async function parsePOST(req)
+{
+	return new Promise((resolve,reject)=>{
+
+		if(typeof(hasteObj.req.headers['content-type']) != 'undefined')
+        {
+          // parse post request 
+
+          if((hasteObj.req.method == 'POST' &&  hasteObj.req.headers['content-type'].match(/(multipart\/form\-data\;)/g)))
+          {
+            try
+            {
+              var form = new this.AllowModules.multiparty.Form();
+
+              form.parse(req,function(err,fields,files)
+              {
+              	if(err)
+              	{
+              		reject(err);
+              		console.error(err);
+              		return;
+              	}
+
+                var bindkey = {
+                  fields:fields,
+                  files:files
+                };
+
+                resolve({status:true,data:bindkey});
+
+              });
+
+            }
+            catch(e)
+            {
+              reject({status:false,msg:'Please install multiparty {npm install multiparty}'});
+              console.error('Please install multiparty {npm install multiparty}');
+            }
+
+          }
+          else
+          {
+            var body = '';
+            hasteObj.req.on('data',function(data)
+            {
+              body += data;
+            });
+
+            hasteObj.req.on('end',function()
+            {
+              if(hasteObj.req.headers['content-type'] == 'application/json')
+              {
+                try
+                {
+                  var jsonData = JSON.parse(body);
+                  resolve({status:true,data:jsonData});
+                }
+                catch(e)
+                {
+                  console.error(e);
+                  reject({status:false,msg:e.stack.toString()});
+                  console.error(e.stack.toString());
+                }
+              }
+              else
+              {
+                resolve({status:true,data:qs.parse(body)});
+              }
+            });
+          }
+        }
+        else
+        {
+        	reject({status:false,msg:'No content-type header is present in the request'});
+        	console.error('No content-type header is present in the request');
+        }
+	});
+}
+
+async function fileStat(filePath)
+{
+	return new Promise((resolve,reject)=>{
+		fs.stat(filePath,function(err,result)
+		{
+			if(err)
+			{
+				reject(err);
+			}
+			else
+			{
+				resolve(result);
+			}
+		});
+	});	
+}
+
+function GlobalException(message,stack)
+{
+   this.message = message;
+   this.stack = stack;
+}
+
+async function closeConnection(message)
+{
+	if(message !== "Exception")
+	{
+		console.log("Server is closing gracefully");
+		if(hasteObj.server != null)
+		{
+			hasteObj.server.close();
+		}
+		console.log("#######################################################################");
+		console.log("Server closed");
+		process.exit(0);
+	}
+}
 
 let session = {
   currentSession:'',
@@ -3589,11 +1663,11 @@ let session = {
   {
     // if cookie is not undefined
 
-    if(typeof(hasteObj.request.headers.cookie) != 'undefined')
+    if(typeof(hasteObj.req.headers.cookie) != 'undefined')
     {
       // getting the number of session cookie
 
-      var sessionCookie = hasteObj.request.headers.cookie;
+      var sessionCookie = hasteObj.req.headers.cookie;
       sessionCookie = sessionCookie.split(';');
       var sessionCookieLen = sessionCookie.length;
       var nullCount = 0;
@@ -3652,7 +1726,7 @@ let session = {
         // setting value to the object
         sessionObj[session.currentSession][key] = value;
         sessionObj[session.currentSession]['time'] = new Date();
-        hasteObj.response.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
+        hasteObj.res.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
       }
     }
     else
@@ -3677,13 +1751,13 @@ let session = {
         sessionObj[session.currentSession]['time'] = new Date();
       }
 
-      hasteObj.response.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
+      hasteObj.res.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
     }
   },
   get:function(key)
   {
     // getting the cookie headers
-    var sessionValue = hasteObj.request.headers.cookie;
+    var sessionValue = hasteObj.req.headers.cookie;
 
     // if the cookie header is not empty
 
@@ -3691,11 +1765,11 @@ let session = {
     {
       // if cookie is not undefined
 
-      if(typeof(hasteObj.request.headers.cookie) != 'undefined')
+      if(typeof(hasteObj.req.headers.cookie) != 'undefined')
       {
         // getting the length of the cookie
 
-        var sessionCookie = hasteObj.request.headers.cookie;
+        var sessionCookie = hasteObj.req.headers.cookie;
         sessionCookie = sessionCookie.split(';');
         var sessionCookieLen = sessionCookie.length;
         var nullCount = 0;
@@ -3756,13 +1830,13 @@ let session = {
   },
   del:function(key)
   {
-    var sessionValue = hasteObj.request.headers.cookie;
+    var sessionValue = hasteObj.req.headers.cookie;
     if(sessionValue != '')
     {
       // if cookie is found
-      if(typeof(hasteObj.request.headers.cookie) != 'undefined')
+      if(typeof(hasteObj.req.headers.cookie) != 'undefined')
       {
-        var sessionCookie = hasteObj.request.headers.cookie;
+        var sessionCookie = hasteObj.req.headers.cookie;
         sessionCookie = sessionCookie.split(';');
         var sessionCookieLen = sessionCookie.length;
         var nullCount = 0;
@@ -3811,13 +1885,13 @@ let session = {
   },
   destroy:function()
   {
-    var sessionValue = hasteObj.request.headers.cookie;
+    var sessionValue = hasteObj.req.headers.cookie;
     if(sessionValue != '')
     {
       // if cookie is found
-      if(typeof(hasteObj.request.headers.cookie) != 'undefined')
+      if(typeof(hasteObj.req.headers.cookie) != 'undefined')
       {
-        var sessionCookie = hasteObj.request.headers.cookie;
+        var sessionCookie = hasteObj.req.headers.cookie;
         sessionCookie = sessionCookie.split(';');
         var sessionCookieLen = sessionCookie.length;
         var nullCount = 0;
@@ -3833,7 +1907,7 @@ let session = {
             {
               sessionObj[sessionCookie[i][1]] = null;
               delete sessionObj[sessionCookie[i][1]];
-              hasteObj.response.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
+              hasteObj.res.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
               
               return true;
             }
@@ -3865,7 +1939,7 @@ let session = {
           sessionObj[this.currentSession] = null;
           delete sessionObj[this.currentSession];
           this.currentSession = '';
-          hasteObj.response.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
+          hasteObj.res.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
           return true;
         }
         else
@@ -3883,7 +1957,7 @@ let session = {
         sessionObj[this.currentSession] = null;
         delete sessionObj[this.currentSession];
         this.currentSession = '';
-        hasteObj.response.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
+        hasteObj.res.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
         return true;
       }
       else
@@ -3920,7 +1994,639 @@ let session = {
   }
 };
 
-session.clearSession();
+async function writeLogs(path,data,callback = null)
+{
+    return new Promise((resolve,reject)=>{
+    	fs.open(path, 'w', function(err, fd)
+	    {
+	        if(err)
+	        {
+	            reject({err:err,status:false});
+	        }
+
+	        fs.write(fd, data,function(err)
+	        {
+	            if(err)
+	            {
+	                reject({err:err,status:false});
+	            }
+	            else
+	            {
+	                fs.close(fd, function()
+	                {
+	                    resolve({msg:'Write successfully',status:true});
+	                });
+	            }
+	        });
+	    });
+    }); 
+}
+
+async function Authorization(req)
+{
+    return new Promise((resolve,reject)=>{
+    	try
+	    {
+	        let auth = hasteObj.req.headers['authorization'].split(' ')[1];
+
+	        let decodedHeader = new Buffer(auth, 'base64').toString();
+
+	        decodedHeader = decodedHeader.split(':');
+
+	        resolve(decodedHeader);
+
+	    }
+	    catch(e)
+	    {
+	        reject(e);
+	    }
+    });
+}
+
+
+
+// getting cookies
+
+async function getCookies(req)
+{
+    return new Promise((resolve,reject)=>{
+    	try
+    	{
+    		var list = {},rc = hasteObj.req.headers.cookie;
+
+		    rc && rc.split(';').forEach(function( cookie )
+		    {
+		        var parts = cookie.split('=');
+		        
+		        list[parts.shift().trim()] = decodeURI(parts.join('='));
+		    });
+
+		    resolve(list);
+    	}
+    	catch(e)
+    	{
+    		reject(e);
+    	}
+    });
+}
+
+// setting cookies
+
+
+
+async function setCookies(cookies)
+{
+    return new Promise((resolve,reject)=>{
+    	try
+    	{
+    		var list = [ ];
+
+		    for (var key in cookies)
+		    {
+		        list.push(key + '=' + encodeURIComponent(cookies[key]));
+		    }
+
+		    hasteObj.cookieStatus = list.join('; ');
+
+		    resolve({"Set-Cookie":list.join('; ')});
+    	}
+    	catch(e)
+    	{
+    		reject(e);
+    	}
+    });
+}
+
+
+
+// getting userAgents browser details
+
+
+
+async function getUserAgent(req)
+{
+    return new Promise((resolve,reject)=>{
+    	try
+    	{
+    		if(typeof(hasteObj.req.headers['user-agent']) != 'undefined' && hasteObj.req.headers['user-agent'] != '')
+	        {
+	            resolve(hasteObj.req.headers['user-agent']);
+	        }
+	        else
+	        {
+	            reject(null);
+	        }
+    	}
+    	catch(e)
+    	{
+    		reject(e);
+    	}
+    });
+}
+
+
+// send response for 401 authorization
+
+
+async function sendAuthorization(msg)
+{
+    return new Promise(async ()=>{
+    	try
+    	{
+    		if(!hasteObj.res.headersSent)
+	        {
+	          hasteObj.res.writeHead(401,{
+	            'Keep-Alive':' timeout=5, max=500',
+	            'Server': 'Node Server',
+	            'Developed-By':'Pounze It-Solution Pvt Limited',
+	            'Content-Type':'text/html',
+	            'WWW-Authenticate':'Basic realm="'+msg+'"'
+	          });
+	        }
+	        
+	        var readerStream = await readFiles('./error_files/'+config.errorPages.NotAuthorized);
+
+	        readerStream.on('error', function(error)
+		    {
+	            hasteObj.res.writeHead(404, 'Not Found');
+	        	hasteObj.res.end();
+	        });
+
+	        readerStream.pipe(hasteObj.res);
+
+	        hasteObj.res.on("end",function()
+	        {
+	          readerStream.destroy();
+	        });
+    	}
+    	catch(e)
+    	{
+    		reject(e);
+    	}
+    });
+}
+
+
+
+// checking for 401 authorization username and password
+
+
+
+function checkAuth(req)
+{
+    try
+    {
+    	if(typeof(hasteObj.req.headers['authorization']) == 'undefined')
+	    {
+	        return false;
+	    }
+	    else
+	    {
+	        return true;
+	    }
+    }
+    catch(e)
+    {
+    	return false;
+    	console.error(e);
+    }
+}
+
+async function renderPage(Render,page,code = null,headers = null,compression = null)
+{
+	// zip compression
+
+	if(compression != null)
+	{
+	    hasteObj.res.setHeader('content-encoding','gzip');
+	}
+
+	/*
+
+   		It checks for array if find and replace is array or not
+
+  	*/
+
+  	if(typeof(Render) == 'object' && !Array.isArray(Render))
+  	{
+  		try
+    	{
+    		/*
+		        Checks for file existence using synchronous file reader
+
+		    */
+
+	      	var stat = await fileStat('./views/'+page+'.html');
+
+	      	var data = [];
+
+	      	var regexData;
+
+	      	/*
+		        verifies if its file or directory
+		    */
+
+		    if(stat.isFile())
+		    {
+		    	var modifiedDate = new Date(stat.mtimeMs).getTime();
+
+		        /*
+
+		          If it is file then readstream
+
+		        */
+
+		        var readerStream = fs.createReadStream('./views/'+page+'.html');
+
+				var data = [];
+
+				readerStream.on('error', function(error)
+			    {
+		            hasteObj.res.writeHead(404, 'Not Found');
+		          	hasteObj.res.end();
+		        });
+
+		        readerStream.on('data',function(chunk)
+		        {
+		          data.push(chunk);
+		          // activating zip compression for html pages, javascript, images, and css   
+		        });
+
+			    readerStream.on('end',function()
+			    {
+			    	data = Buffer.concat(data).toString();
+	    	
+			        for(var key in Render)
+			        { 
+			            regexData = new RegExp(key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'),"g");
+			            data = data.replace(regexData, Render[key]);
+			        }
+
+			    	if(headers == null)
+		          	{
+
+			            if(!hasteObj.res.headersSent)
+			            {
+			              hasteObj.res.setHeader("Keep-Alive","timeout=5, max=500");
+			              hasteObj.res.setHeader("Server","Node Server");
+			              hasteObj.res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+			              hasteObj.res.setHeader('Cache-Control','public,max-age=31536000');
+			              hasteObj.res.setHeader('Pragma','public,max-age=315360008');
+			              hasteObj.res.setHeader('Content-Type','text/html');
+			              hasteObj.res.setHeader('Expires',new Date());
+			              hasteObj.res.setHeader('ETag',modifiedDate);
+			            }
+
+			            if(hasteObj.cookieStatus)
+			            {
+			              hasteObj.res.setHeader("Set-Cookie",hasteObj.cookieStatus);
+			            }
+
+			            if(hasteObj.maintainanceStat != config.server.maintainance)
+			            {
+			              hasteObj.maintainanceStat = config.server.maintainance;
+			              hasteObj.res.statusCode = 200;
+			            }
+			            else
+			            {
+			              if(typeof(hasteObj.req.headers['if-none-match']) == 'undefined')
+			              {
+			                hasteObj.res.statusCode = 200;
+			              }
+			              else
+			              {
+			                if(hasteObj.req.headers['if-none-match'] != modifiedDate)
+			                {
+			                  hasteObj.res.statusCode = 200;
+			                }
+			                else
+			                {
+			                  hasteObj.res.statusCode = 304;
+			                }
+			              }
+			            }
+			        }
+			        else
+			        {
+			          hasteObj.res.writeHead(code,headers);
+			        }
+
+			        hasteObj.res.end(data);
+			    });
+
+			    hasteObj.res.on("end",function()
+			    {
+			      readerStream.destroy();
+			    });
+		    }
+		    else
+			{
+			    console.error('View template page name must be a javascript file');
+			}
+    	}
+    	catch(e)
+    	{
+    		if(!hasteObj.res.headersSent)
+	        {
+	          hasteObj.res.writeHead(500,hasteObj.header500);
+	        }
+	       
+	        var readerStream = await readFiles('./error_files/'+config.errorPages.InternalServerError);
+
+	        readerStream.pipe(hasteObj.res);
+
+	        hasteObj.res.on("end",function()
+	        {
+	          readerStream.destroy();
+	        });
+
+	        console.error(e);
+    	}
+  	}
+  	else
+  	{
+  		console.error('Render variable must be an object');
+  	} 
+}
+
+// method to copy file from temp folder use for file uploading
+
+async function fileCopy(path,pathDir)
+{
+    return new Promise((reject,resolve)=>{
+
+    	fs.readFile(path,function(error, data)
+	    {
+	    	if(error)
+	    	{
+	    		reject(false);
+	    		return;
+	    	}
+
+		    fs.writeFile(pathDir,data,function(error)
+		    {
+		        if(error)
+		        {
+		          reject(false);
+		          return;
+		        }
+
+		        resolve(true);
+
+		    });
+
+	    });
+
+    });
+}
+
+
+
+// filereader to read  files in buffers
+
+
+
+async function fileReader(path)
+{
+    return new Promise((resolve,reject)=>{
+
+    	var data = '';
+
+	    readerStream = fs.createReadStream(path);
+
+	    readerStream.on('data',function(chunk)
+	    {
+	      data += chunk;
+	    });
+
+	    readerStream.on('end',function()
+	    {
+	    	resolve(data);
+	      	readerStream.destroy();
+	    });
+
+	    readerStream.on('error',function(error)
+	    {
+	    	reject(error);
+	      	readerStream.destroy();
+	    });
+    });
+}
+
+
+
+// formatting dates
+
+
+
+function formatDate(date)
+{
+
+    try
+    {
+    	month = '' + (date.getMonth() + 1),
+
+	    day = '' + date.getDate(),
+
+	    year = date.getFullYear(),
+
+	    hour = date.getHours(),
+
+	    min = date.getMinutes(),
+
+	    sec = date.getSeconds();
+
+
+	    if (month.length < 2) month = '0' + month;
+
+	    if (day.length < 2) day = '0' + day;
+
+	    if (hour.length < 2) hour = '0' + hour;
+
+	    if (min.length < 2) min = '0' + min;
+
+	    if (sec.length < 2) sec = '0' + sec;
+
+
+
+	    return [year, month, day].join('-')+' '+hour+':'+min+':'+sec;
+    }
+    catch(e)
+    {
+    	console.error(e);
+    }
+}
+
+
+
+// hash method to encypt data
+
+
+
+function Hash(method,string,encoding)
+{
+    try
+    {
+    	var crypto = require('crypto');
+
+	    var hash = '';
+
+	    if(method == 'sha256')
+	    {
+	      if(encoding == 'hex')
+	      {
+	        hash = crypto.createHash('sha256').update(string).digest('hex');
+	      }
+	      else if(encoding == 'base64')
+	      {
+	        hash = crypto.createHash('sha256').update(string).digest('base64');
+	      }
+	    }
+	    else if(method == 'sha512')
+	    {
+	      const key = 'IgN!TiOn11!1234567890!@#$%^&*()';
+	      
+	      if(encoding == 'hex')
+	      {
+	        hash = crypto.createHmac('sha512', key).update(string).digest('hex');
+	      }
+	      else if(encoding == 'base64')
+	      {
+	        hash = crypto.createHmac('sha512', key).update(string).digest('base64');
+	      }
+	    }
+	    else if(method == 'sha1')
+	    {
+	      if(encoding == 'hex')
+	      {
+	        hash = crypto.createHash('sha1').update(string).digest('hex');
+	      }
+	      else if(encoding == 'base64')
+	      {
+	        hash = crypto.createHash('sha1').update(string).digest('base64');
+	      }
+	    }
+	    else if(method == 'md5')
+	    {
+	      if(encoding == 'hex')
+	      {
+	        hash = crypto.createHash('md5').update(string).digest('hex');
+	      }
+	      else if(encoding == 'base64')
+	      {
+	        hash = crypto.createHash('md5').update(string).digest('base64');
+	      }
+	    }
+	    else
+	    {
+	      hash = 'Please select a valid hashing method';
+	    } 
+
+	    return hash;
+    }
+    catch(e)
+    {
+    	console.error(e);
+    }
+}
+
+
+
+// method to make http client request to other server
+
+
+
+function RemoteRequest(params,callback)
+{
+	return new Promise((resolve,reject)=>{
+
+		var postData = '';
+
+	    var data = '';
+
+	    if(params.protocol == 'http')
+	    {
+
+	      if(typeof(params.message) != 'undefined')
+	      {
+	        postData = params.message;
+	      }
+
+	      var req = http.request(params.options,function(res)
+	      {
+
+	        // on data event is fired call back is append into data variable
+
+	        res.on('data', function(chunk)
+	        {
+	           data += chunk;
+
+	        });
+
+	        // after ending the request
+
+	        res.on('end',function()
+	        {
+	          resolve(data);
+
+	           // console.error('No more data in response.');
+	        });
+
+	      });
+
+	      req.on('error',function(e)
+	      {
+	        reject(`problem with request: ${e.message}`);
+	      });
+
+	      // write data to request body
+
+	      req.write(JSON.stringify(postData));
+
+	      req.end();
+
+	    }
+
+	    if(params.protocol == 'https')
+	    {
+
+	      if(typeof(params.message) != 'undefined')
+	      {
+	        postData = params.message;
+	      }
+
+	      var req = https.request(params.options,function(res)
+	      {
+	        // on data event is fired call back is append into data variable
+
+	        res.on('data', function(chunk)
+	        {
+	           data += chunk;
+	        });
+
+	        // after ending the request
+	        res.on('end',function()
+	        {
+	          resolve(data);
+	           // console.error('No more data in response.');
+	        });
+
+	      });
+
+	      req.on('error',function(e)
+	      {
+	        reject(`problem with request: ${e.message}`);
+	      });
+
+	      // write data to request body
+
+	      req.write(JSON.stringify(postData));
+
+	      req.end();
+
+	    }
+	});	
+}
 
 /*
   create unique session id
@@ -3950,41 +2656,53 @@ var compress = {
   gzip:function(data)
   {
     var zlib = require('zlib');
-    hasteObj.response.setHeader('content-encoding','gzip');
+    hasteObj.res.setHeader('content-encoding','gzip');
 
     zlib.gzip(data, function (_, result)
     { 
-      hasteObj.response.end(result);              
+      hasteObj.res.end(result);              
     });
   },
   deflate:function(data)
   {
     var zlib = require('zlib');
-    hasteObj.response.setHeader('content-encoding','deflate');
+    hasteObj.res.setHeader('content-encoding','deflate');
     zlib.deflate(data, function (_, result)
     { 
-      hasteObj.response.end(result);                 
+      hasteObj.res.end(result);                 
     });
   },
   DeflateRaw:function(data)
   {
     var zlib = require('zlib');
-    hasteObj.response.setHeader('content-encoding','deflate');
+    hasteObj.res.setHeader('content-encoding','deflate');
     zlib.deflateRaw(data, function (_, result)
     { 
-      hasteObj.response.end(result);                 
+      hasteObj.res.end(result);                 
     });
   }
 }; 
 
+session.clearSession();
 
-// methods and objects exported
+process.on('uncaughtException', error => {
+  console.warn(`Uncaught exception: ${error.toString()}`)
+  closeConnection("Exception")
+})
+process.on('SIGINT', signal => {
+  console.warn(`Received ${signal} signal.`)
+  closeConnection("CtrlC")
+})
+process.on('exit', code => {
+  console.warn(`About to exit with code ${code}.`)
+  closeConnection("exit")
+})
 
-exports.__init__ = haste;
+exports.init = haste;
+
+exports.defaultHeaders = defaultHeaders;
 
 exports.renderPage = renderPage;
-
-exports.mySQL = mySQL;
 
 exports.fileCopy = fileCopy;
 
@@ -4013,7 +2731,3 @@ exports.getUserAgent = getUserAgent;
 exports.session = session;
 
 exports.compress = compress;
-
-//=====================================================================================================================================
-
-// the end | Contact and join Pounze Developer Community
