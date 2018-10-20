@@ -52,7 +52,7 @@ const mimeList = require('./MimeList.js');
 
 const CachedFiles = require('./CachedFiles.js');
 
-var zlib = require('zlib');
+const zlib = require('zlib');
 
 
 /*
