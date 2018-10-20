@@ -48,6 +48,10 @@ var viewsObj = require('../common_templates/common_templates.js');
 
 const sessionObj = require(__dirname+'/session.js');
 
+const mimeList = require('./MimeList.js');
+
+const CachedFiles = require('./CachedFiles.js');
+
 
 /*
 
@@ -58,7 +62,45 @@ const sessionObj = require(__dirname+'/session.js');
 
 var haste = function(params)
 {
-    return new Library(params);
+  if(typeof(__rootdir) == 'undefined')
+  {
+    console.error("__rootdir must be defined as __dirname in the app.js | server.js or what ever root file");
+    process.exit(1);
+    return;
+  }
+
+  if(config.cache.staticFiles)
+  {
+    try
+    {
+      CachedFiles.staticFiles.File404 = {
+        fileStat:fs.statSync(__rootdir+"/error_files/404.html"),
+        data:fs.readFileSync(__rootdir+"/error_files/404.html")
+      };
+
+      CachedFiles.staticFiles.File401 = {
+        fileStat:fs.statSync(__rootdir+"/error_files/401.html"),
+        data:fs.readFileSync(__rootdir+"/error_files/401.html")
+      };
+
+      CachedFiles.staticFiles.File403 = {
+        fileStat:fs.statSync(__rootdir+"/error_files/403.html"),
+        data:fs.readFileSync(__rootdir+"/error_files/403.html")
+      };
+
+      CachedFiles.staticFiles.File500 = {
+        fileStat:fs.statSync(__rootdir+"/error_files/500.html"),
+        data:fs.readFileSync(__rootdir+"/error_files/500.html")
+      };
+    }
+    catch(e)
+    {
+      console.log(e);
+      return;
+    }
+  }
+
+  return new Library(params);
 };
 
 var Library = function(params)
@@ -88,37 +130,38 @@ var Library = function(params)
 
   this.server = null;
 
+  this.socket = null;
+
   this.AllowModules = {};
 
   var date = new Date();
 
+  date.setMonth(date.getMonth() + 1);
+
   this.header404 = {
-    'Keep-Alive':' timeout=5, max=500',
-	'Server': 'Node Server',
-	'Developed-By':'Pounze It-Solution Pvt Limited',
-	'Cache-Control':'no-store, no-cache, must-revalidate',
-	'Pragma': 'public,max-age=31536000',
-	'Content-Type':'text/html',
-	'Expires':date
+  	'Server': 'Node Server',
+  	'Developed-By':'Pounze It-Solution Pvt Limited',
+  	'Content-Type':'text/html',
+    'Cache-Control':'public, max-age=350000',
+    'Pragma':'public, max-age=350000',
+    'Expires':date
   };
 
   this.header500 = {
-    'Keep-Alive':' timeout=5, max=500',
-	'Server': 'Node Server',
-	'Developed-By':'Pounze It-Solution Pvt Limited',
-	'Cache-Control':'no-store, no-cache, must-revalidate',
-	'Pragma': 'public,max-age=31536000',
-	'Content-Type':'text/html',
-	'Expires':date
+  	'Server': 'Node Server',
+  	'Developed-By':'Pounze It-Solution Pvt Limited',
+  	'Content-Type':'text/html',
+    'Cache-Control':'public, max-age=350000',
+    'Pragma':'public, max-age=350000',
+    'Expires':date
   };
 
   this.header403 = {
-    'Keep-Alive':' timeout=5, max=500',
     'Server': 'Node Server',
     'Developed-By':'Pounze It-Solution Pvt Limited',
-    'Cache-Control':'no-store, no-cache, must-revalidate',
-    'Pragma': 'public,max-age=31536000',
     'Content-Type':'text/html',
+    'Cache-Control':'public, max-age=350000',
+    'Pragma':'public, max-age=350000',
     'Expires':date
   };
 
@@ -136,428 +179,446 @@ var hasteObj = haste();
 
 haste.fn = Library.prototype = 
 {
-	HttpServer:async function(ip,port,callback = null)
+  HttpsServer:function(ip,port,options,callback = null)
+  {
+    try
     {
-    	return handleHttpServer(ip,port,callback).catch(function(error)
-    	{
-    		console.error(error);
-    	});
-    },
-    HttpsServer:async function(ip,port,options,callback = null)
-    {
-    	return handleHttpsServer(ip,port,options,callback).catch(function(error)
-    	{
-    		console.error(error);
-    	});
-    },
-    DefaultMethod:async function(callback)
-    {
-      defaultMethod = callback;
-    },
-    dependencies:{},
-    get:function(uri,argument)
-    {
-        // get method for get routers
-
-        hasteObj.globalGETObject[uri] = {
-            "uri":uri,
-            "request_type":"GET",
-            "argument":argument,
-            "regex":uri
-        };
-
-        this.requestType = "GET";
-
-        this.path = uri;
-
-        return this;
-    },
-    post:function(uri,argument)
-    {
-        // post method for post routers
-
-        hasteObj.globalPOSTObject[uri] = {
-            "uri":uri,
-            "request_type":"POST",
-            "argument":argument,
-            "regex":uri
-        };
-
-        this.requestType = "POST";
-
-        this.path = uri;
-
-        return this;
-    },
-    put:async function(uri,argument)
-    {
-
-    },
-    delete:async function(uri,argument)
-    {
-
-    },
-    middlewares:function(middleware)
-    {   
-      try
+      if(typeof(ip) != 'string' || typeof(port) != 'number')
       {
-      	if(this.requestType == "GET")
-      	{
-      		hasteObj.globalGETObject[this.path].middleware = middleware;
-      	}
-      	else if(this.requestType == "POST")
-      	{
-      		hasteObj.globalPOSTObject[this.path].middleware = middleware;
-      	}
-      }
-      catch(e)
-      {
-      	console.error(e);
+        console.error("IP and PORT cannot be empty",null);
       }
 
-      return this;
-    },
-    where:function(regex)
-    {
+      var cpuCount = null;
 
-      try
+      if(cluster.isMaster)
       {
-      	// checking for regular expression match
-
-	    if(this.requestType == "GET")
-	    {
-	    	hasteObj.globalGETObject[this.path].regexExp = regex;
-
-	     	hasteObj.globalGETObject[this.path]['regex'] = hasteObj.globalGETObject[this.path]['uri'];
-
-	     	for(regex in hasteObj.globalGETObject[this.path]['regexExp'])
-	      	{
-	        	hasteObj.globalGETObject[this.path]['regex'] = hasteObj.globalGETObject[this.path]['regex'].replace(regex,hasteObj.globalGETObject[this.path]['regexExp'][regex]);
-	      	}
-	    }
-	    else if(this.requestType == "POST")
-	    {
-	    	hasteObj.globalPOSTObject[this.path].regexExp = regex;
-
-	     	hasteObj.globalPOSTObject[this.path]['regex'] = hasteObj.globalPOSTObject[this.path]['uri'];
-
-	     	for(regex in hasteObj.globalPOSTObject[this.path]['regexExp'])
-	      	{
-	        	hasteObj.globalPOSTObject[this.path]['regex'] = hasteObj.globalPOSTObject[this.path]['regex'].replace(regex,hasteObj.globalPOSTObject[this.path]['regexExp'][regex]);
-	      	}
-	    }
-
-      }
-      catch(e)
-      {
-      	console.error(e);
-      }
-
-      return this;
-
-    },
-    views:async function(file,req,res,data)
-    {
-
-      /*
-        views get file and send data
-      */
-
-	    try
-	    {
-
-	      var commongData = await viewsObj.init(req,res,data);
-
-	      var stat = await fileStat('./templates/'+file+'.js');
-
-	      if(stat != undefined && stat.isFile())
-	      { 
-
-	        var modifiedDate = new Date(stat.mtimeMs).getTime();
-
-	        if(!hasteObj.res.headersSent)
-	        {
-	        	if(typeof(hasteObj.req.headers['if-none-match']) == 'undefined')
-	            {
-	              hasteObj.res.setHeader('ETag',modifiedDate);
-	              hasteObj.res.statusCode = 200;
-	            }
-	            else
-	            {
-	              hasteObj.res.setHeader('ETag',modifiedDate);
-	              if(hasteObj.req.headers['if-none-match'] != modifiedDate)
-	              {
-	                hasteObj.res.statusCode = 200;
-	              }
-	              else
-	              {
-	                hasteObj.res.statusCode = 304;
-	              }
-	            }
-	        }
-
-	        var views = require('../templates/'+file+'.js');
-
-	        await views.init(req,res,data,commongData);
-
-	      }
-	      else
-	      {
-	        console.error('View template page name must be a javascript file');
-	      }
-	    }
-	    catch(e)
-	    {
-	        if(!hasteObj.res.headersSent)
-	        {
-	          hasteObj.res.writeHead(500,hasteObj.header500);
-	        }
-	        
-	        var readerStream = await readFiles('./error_files/'+config.errorPages.InternalServerError);
-
-	        readerStream.on('error', function(error)
-			{
-		        hasteObj.res.writeHead(404, 'Not Found');
-		       	hasteObj.res.end();
-		    });
-
-	        readerStream.pipe(res);
-
-	        res.on("end",function()
-	        {
-	          readerStream.destroy();
-	        });
-
-	        console.error(e);
-
-	    }
-
-    },
-    AllowDirectories:function(path)
-    {
-
-        // allow folders to get accessed
-        hasteObj.staticPath = path;
-    },
-    close:function()
-    {
-
-        // closing the haste object
-
-        exports.init = null;
-
-        delete hasteObj;
-
-        delete Library;
-
-        delete this.haste;
-
-        delete this.staticPath;
-
-        delete this.globalGETObject;
-
-        delete this.globalPOSTObject;
-
-        delete this.globalObject;
-
-        delete this.input;
-
-        delete this;
-
-        delete this.input;
-
-        delete this.request;
-
-        delete this.response;
-
-        delete this.cookieStatus;
-
-    },
-    webSocket:function(input,callback)
-    {
-
-        // method for realtime application using websocket.io and sending data to controller
-
-        if(typeof(input["cortex"]) != 'undefined' && typeof(input["cortex"]) == 'string' && input["cortex"] != '')
+        if(typeof(config.server.cpuCores) != 'undefined' && typeof(config.server.cpuCores) == 'number')
         {
-            fs.stat('./controllers/'+input["cortex"]+'.js',function(err,data)
-            {
-                if(err)
-                {
-                	callback(false);
-                    console.error('controller does not exists');
-                }
-
-                var controller = require('../controllers/'+input["cortex"]+'.js');
-
-                var callbackData = controller.init(null,null,input);
-
-                callback(callbackData);
-
-            });
-
-        }   
+          cpuCount = config.server.cpuCores;
+        }
         else
         {
-        	callback(false);
-            console.error('cortex field must be string');
+          cpuCount = require('os').cpus().length;
         }
 
-        return this;
+        for(var i=0;i<cpuCount;i++)
+        {
+          cluster.fork();
+        }
+
+        cluster.on('exit',()=>{
+          cluster.fork();
+        });
+      }
+      else
+      {
+        hasteObj.server = https.createServer(options);
+
+        hasteObj.server.on('request', function(req, res)
+        {
+          handleRequest(req,res);
+        });
+
+        hasteObj.server.on('connection',function(socket)
+        { 
+          socket.timeout = config.server.socketTimeout;
+          socket.setTimeout(config.server.socketTimeout);
+
+          hasteObj.socket = socket;
+
+          hasteObj.socket.on('timeout', () => {
+            hasteObj.socket.end();
+          });
+        });
+
+        hasteObj.server.setMaxListeners(config.server.maxListeners);
+
+        hasteObj.server.on('clientError', (err, socket) => {
+           hasteObj.socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+        });
+
+        /*
+
+           Server listening and closing the server
+
+        */
+
+        hasteObj.server.listen(port,ip);
+
+        if(callback != null)
+        {
+          callback(hasteObj.server);
+        }
+      }
+    }
+    catch(e)
+    {
+      if(callback != null)
+      {
+        callback(e);
+      }
+    }
+  },
+  HttpServer:function(ip,port,callback = null)
+  {
+    try
+    {
+      if(typeof(ip) != 'string' || typeof(port) != 'number')
+      {
+        console.error("IP and PORT cannot be empty",null);
+      }
+
+      var cpuCount = null;
+
+      if(cluster.isMaster)
+      {
+        if(typeof(config.server.cpuCores) != 'undefined' && typeof(config.server.cpuCores) == 'number')
+        {
+           cpuCount = config.server.cpuCores;
+        }
+        else
+        {
+           cpuCount = require('os').cpus().length;
+        }
+
+        for(var i=0;i<cpuCount;i++)
+        {
+            cluster.fork();
+        }
+
+        cluster.on('exit',()=>{
+           cluster.fork();
+        });
+      }
+      else
+      {
+        hasteObj.server = http.createServer();
+
+        /*
+            Http server configurations
+        */
+
+        hasteObj.server.on('request', function(req, res)
+        {
+          handleRequest(req,res);
+        });
+
+        hasteObj.server.on('connection',function(socket)
+        { 
+          socket.timeout = config.server.socketTimeout;
+          socket.setTimeout(config.server.socketTimeout);
+
+          hasteObj.socket = socket;
+
+          hasteObj.socket.on('timeout', () => {
+            hasteObj.socket.end();
+          });
+        });
+
+        hasteObj.server.setMaxListeners(config.server.maxListeners);
+
+        hasteObj.server.on('clientError', (err, socket) => {
+           hasteObj.socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+        });
+
+        /*
+
+           Server listening and closing the server
+
+        */
+
+        hasteObj.server.listen(port,ip);
+
+        if(callback != null)
+        {
+          callback(hasteObj.server);
+        }
+      }
+    }
+    catch(e)
+    {
+      if(callback != null)
+      {
+        callback(e);
+      }
+    }
+  },
+  DefaultMethod:function(callback)
+  {
+    defaultMethod = callback;
+  },
+  dependencies:{},
+  get:function(uri,argument)
+  {
+    // get method for get routers
+
+    hasteObj.globalGETObject[uri] = {
+      "uri":uri,
+      "request_type":"GET",
+      "argument":argument,
+      "regex":uri
+    };
+
+    this.requestType = "GET";
+
+    this.path = uri;
+
+    return this;
+  },
+  post:function(uri,argument)
+  {
+    // post method for post routers
+
+    hasteObj.globalPOSTObject[uri] = {
+      "uri":uri,
+      "request_type":"POST",
+      "argument":argument,
+      "regex":uri
+    };
+
+    this.requestType = "POST";
+
+    this.path = uri;
+
+    return this;
+  },
+  put:function(uri,argument)
+  {
+
+  },
+  delete:function(uri,argument)
+  {
+
+  },
+  middlewares:function(middleware)
+  {   
+    try
+    {
+    	if(this.requestType == "GET")
+    	{
+    		hasteObj.globalGETObject[this.path].middleware = middleware;
+    	}
+    	else if(this.requestType == "POST")
+    	{
+    		hasteObj.globalPOSTObject[this.path].middleware = middleware;
+    	}
+    }
+    catch(e)
+    {
+    	console.error(e);
+    }
+
+    return this;
+  },
+  where:function(regex)
+  {
+
+    try
+    {
+    	// checking for regular expression match
+
+      if(this.requestType == "GET")
+      {
+      	hasteObj.globalGETObject[this.path].regexExp = regex;
+
+       	hasteObj.globalGETObject[this.path]['regex'] = hasteObj.globalGETObject[this.path]['uri'];
+
+       	for(regex in hasteObj.globalGETObject[this.path]['regexExp'])
+      	{
+        	hasteObj.globalGETObject[this.path]['regex'] = hasteObj.globalGETObject[this.path]['regex'].replace(regex,hasteObj.globalGETObject[this.path]['regexExp'][regex]);
+      	}
+      }
+      else if(this.requestType == "POST")
+      {
+      	hasteObj.globalPOSTObject[this.path].regexExp = regex;
+
+       	hasteObj.globalPOSTObject[this.path]['regex'] = hasteObj.globalPOSTObject[this.path]['uri'];
+
+       	for(regex in hasteObj.globalPOSTObject[this.path]['regexExp'])
+      	{
+        	hasteObj.globalPOSTObject[this.path]['regex'] = hasteObj.globalPOSTObject[this.path]['regex'].replace(regex,hasteObj.globalPOSTObject[this.path]['regexExp'][regex]);
+      	}
+      }
 
     }
+    catch(e)
+    {
+    	console.error(e);
+    }
+
+    return this;
+
+  },
+  views:function(file,req,res,data)
+  {
+    /*
+      views get file and send data
+    */
+    try
+    {
+      var commongData = viewsObj.init(req,res,data);
+
+      fs.stat(__rootdir+'/templates/'+file+'.js',function(err,stat)
+      {
+        if(err)
+        {
+          renderErrorFiles(404);
+          return;
+        }
+
+        if(stat != undefined && stat.isFile())
+        { 
+          var modifiedDate = new Date(stat.mtimeMs).getTime();
+
+          if(!res.headersSent)
+          {
+            if(typeof(req.headers['if-none-match']) == 'undefined')
+            {
+              res.setHeader('ETag',modifiedDate);
+              res.statusCode = 200;
+            }
+            else
+            {
+              res.setHeader('ETag',modifiedDate);
+
+              if(req.headers['if-none-match'] != modifiedDate)
+              {
+                res.statusCode = 200;
+              }
+              else
+              {
+                res.statusCode = 304;
+              }
+            }
+          }
+
+          var views = require(__rootdir+'/templates/'+file+'.js');
+
+          views.init(req,res,data,commongData);
+        }
+        else
+        {
+          console.error('View template page name must be a javascript file');
+        }
+      });
+    }
+    catch(e)
+    {
+      console.error(e);
+
+      renderErrorFiles(500);
+    }
+
+  },
+  BlockDirectories:function(path)
+  {
+    // allow folders to get accessed
+    hasteObj.staticPath = path;
+  },
+  webSocket:function(input,callback)
+  {
+
+    // method for realtime application using websocket.io and sending data to controller
+
+    if(typeof(input["cortex"]) != 'undefined' && typeof(input["cortex"]) == 'string' && input["cortex"] != '')
+    {
+      fs.stat('./controllers/'+input["cortex"]+'.js',function(err,data)
+      {
+        if(err)
+        {
+        	callback(false);
+          console.error('controller does not exists');
+        }
+
+        var controller = require('../controllers/'+input["cortex"]+'.js');
+
+        var callbackData = controller.init(null,null,input);
+
+        callback(callbackData);
+
+      });
+
+    }   
+    else
+    {
+    	callback(false);
+      console.error('cortex field must be string');
+    }
+
+    return this;
+
+  }
 };
 
-async function modules(req,res,hasteObj,obj)
+function modules(req,res,obj)
 {
 
   try
   {
   	/*
 
-        checking for middleware if array or string 
+      checking for middleware if array or string 
 
-        if array then multiple middleware
+      if array then multiple middleware
 
-        else single middleware
+      else single middleware
 
     */
 
-    var success = 0;
-
     if(typeof(hasteObj.globalObject[obj]["middleware"]) != 'undefined')
     {
-        if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'object' && Array.isArray(hasteObj.globalObject[obj]["middleware"]))
+      if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'object' && Array.isArray(hasteObj.globalObject[obj]["middleware"]))
+      {
+        let middlewareLen = hasteObj.globalObject[obj]["middleware"].length;
+
+        for(var j=0;j<middlewareLen;j++)
         {
-            let middlewareLen = hasteObj.globalObject[obj]["middleware"].length;
-
-            for(var j=0;j<middlewareLen;j++)
-            {
-
-              // iterating thoough the middleware
-
-              try
-              {
-                // checking if the middleware file exists or not
-
-                var middlewarestat = await fileStat('./middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
-                
-                // if the middleware is a file
-
-                if(middlewarestat != undefined && middlewarestat.isFile())
-                {
-                    // then invoke the middleware main method
-
-                  var middlewareFile = require('../middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
-
-                  var middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
-
-                  if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
-                  {
-
-                    // if middleware callback is false then request is stopped here
-
-                    hasteObj.res.setHeader('Content-Type','application/json');
-
-                    hasteObj.res.end(JSON.stringify(middlewareCallbacks[1]));
-
-                    return false;
-
-                  }
-                  else
-                  {
-                    hasteObj.input[hasteObj.globalObject[obj]["middleware"][j]] = middlewareCallbacks[1];
-                    success += 1;
-                  }
-                }
-                else
-                {
-                  console.error('Middlware must be a javascript file');
-                }
-              }
-              catch(e)
-              {
-                // if file is not found of the middleware then 500 internal server error is thrown
-
-                if(!hasteObj.res.headersSent)
-                {
-                  hasteObj.res.writeHead(500,hasteObj.header500);
-                }
-                
-                var readerStream = await readFiles('./error_files/'+config.errorPages.InternalServerError);
-
-                readerStream.on('error', function(error)
-			    {
-		            hasteObj.res.writeHead(404, 'Not Found');
-		        	hasteObj.res.end();
-		        });
-
-                readerStream.pipe(res);
-
-                res.on("end",function()
-                {
-                  readerStream.destroy();
-                });
-
-                console.error(e);
-                return false;
-
-              }
-            }
-
-            if(success == middlewareLen)
-            {
-              	executeMethod(req,res,hasteObj,obj).catch(function(error)
-      			{
-      				console.error(error);
-      			});
-            }
+          processMiddlewares(req,res,obj,j,middlewareLen);   
         }
-        else if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'string')
+      }
+      else if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'string')
+      {
+        fs.stat(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js',function(err,middlewarestat)
         {
-            let middlewarestat = await fileStat('./middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
+          if(stat)
+          {
+            renderErrorFiles(req,res,404);
+            return;
+          }
 
-            if(middlewarestat != undefined && middlewarestat.isFile())
+          if(middlewarestat != undefined && middlewarestat.isFile())
+          {
+            let middlewareFile = require(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
+
+            let middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
+
+            if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
             {
-
-              let middlewareFile = require('../middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
-
-              let middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input).catch(function(err)
-              {
-              	console.error(err);
-              });
-
-              if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
-              {
-                hasteObj.res.setHeader('Content-Type','application/json');
-                hasteObj.res.end(JSON.stringify(middlewareCallbacks[1]));
-                return false;
-              }
-              else
-              {
-                hasteObj.input[hasteObj.globalObject[obj]["middleware"]] = middlewareCallbacks[1];
-                executeMethod(req,res,hasteObj,obj).catch(function(error)
-      			{
-      				console.error(error);
-      			});
-              }
+              res.setHeader('Content-Type','application/json');
+              res.end(JSON.stringify(middlewareCallbacks[1]));
+              return false;
             }
             else
             {
-              console.error('Middlware must be a javascript file');
+              hasteObj.input[hasteObj.globalObject[obj]["middleware"]] = middlewareCallbacks[1];
+              executeMethod(req,res,obj);
             }
-        }
-        else
-        {
-            console.error("Middleware must be string or array");
-        }
+          }
+          else
+          {
+            console.error('Middlware must be a javascript file');
+          }
+
+        });
+      }
+      else
+      {
+        console.error("Middleware must be string or array");
+      }
     }  
     else
     {
-        executeMethod(req,res,hasteObj,obj).catch(function(error)
-		{
-			console.error(error);
-		});
+      executeMethod(req,res,obj);
     }
   }
   catch(e)
@@ -566,7 +627,67 @@ async function modules(req,res,hasteObj,obj)
   }   
 }
 
-async function executeMethod(req,res,hasteObj,obj)
+function processMiddlewares(req,res,obj,j,middlewareLen)
+{
+  try
+  {
+    // checking if the middleware file exists or not
+
+    fs.stat(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js',function(err,middlewarestat)
+    {
+      if(err)
+      {
+        renderErrorFiles(req,res,404);
+        return;
+      }
+
+      // if the middleware is a file
+
+      if(middlewarestat != undefined && middlewarestat.isFile())
+      {
+        // then invoke the middleware main method
+
+        var middlewareFile = require(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
+
+        var middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
+
+        if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
+        {
+          // if middleware callback is false then request is stopped here
+
+          res.setHeader('Content-Type','application/json');
+
+          res.end(JSON.stringify(middlewareCallbacks[1]));
+
+        }
+        else
+        {
+          hasteObj.input[hasteObj.globalObject[obj]["middleware"][j]] = middlewareCallbacks[1];
+        }
+
+        if((j + 1) == middlewareLen)
+        {
+          executeMethod(req,res,obj);
+        }
+      }
+      else
+      {
+        console.error('Middlware must be a javascript file');
+      }
+
+    });
+  }
+  catch(e)
+  {
+    // if file is not found of the middleware then 500 internal server error is thrown
+
+    console.error(e);
+
+    renderErrorFiles(req,res,500);
+  }
+}
+
+function executeMethod(req,res,obj)
 {
 
   /*
@@ -587,50 +708,32 @@ async function executeMethod(req,res,hasteObj,obj)
     try
     {
 
-     var stat = await fileStat('./controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
-
-     if(stat.isFile())
+     fs.stat(__rootdir+'/controllers/'+hasteObj.globalObject[obj]["argument"]+'.js',function(err,stat)
      {
-        var controller = require('../controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
-
-        controller.init(req,res,hasteObj.input).catch(function(err)
+        if(err)
         {
-        	console.error(err);
-        });
-     }
-     else
-     {
-        console.error('Controller must me a javascript file');
-   	  }
+          renderErrorFiles(req,res,404);
+          return;
+        }
+
+        if(stat.isFile())
+        {
+          var controller = require(__rootdir+'/controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
+
+          controller.init(req,res,hasteObj.input);
+        }
+        else
+        {
+          console.error('Controller must me a javascript file');
+        }
+     });
 
     }
     catch(e)
     {
       console.error(e);
 
-      if(!hasteObj.res.headersSent)
-      {
-        hasteObj.res.writeHead(500,hasteObj.header500);
-      }
-     
-      var readerStream = await readFiles('./error_files/'+config.errorPages.InternalServerError);
-
-      readerStream.on('error', function(error)
-	  {
-        hasteObj.res.writeHead(404, 'Not Found');
-       	hasteObj.res.end();
-      });
-
-      readerStream.pipe(res);
-
-      res.on("end",function()
-      {
-        readerStream.destroy();
-      });
-
-      console.error(e);
-      
-      return false;
+      renderErrorFiles(req,res,500);
     }
   }
   else
@@ -640,7 +743,7 @@ async function executeMethod(req,res,hasteObj,obj)
 
 }
 
-async function executeModules()
+function executeModules()
 {
 	if(hasteObj.dependencies["multiparty"] != undefined)
 	{
@@ -653,852 +756,395 @@ async function executeModules()
 	}
 }
 
-async function handleHttpsServer(ip,port,options,callback)
+function getIpAddress(req,res)
 {
-	return new Promise((resolve,reject)=>{
+  /*
+    Requiring IP address to get use ip address 
+  */
 
-		try
-		{
-			if(typeof(ip) != 'string' || typeof(port) != 'number')
-			{
-				console.error("IP and PORT cannot be empty",null);
-			}
+  let getIpObject = require('../blockusers/IpAddress.js');
 
-			var cpuCount = null;
+  let ip;
 
-			if(cluster.isMaster)
-			{
-				if(typeof(config.server.cpuCores) != 'undefined' && typeof(config.server.cpuCores) == 'number')
-		        {
-		           cpuCount = config.server.cpuCores;
-		        }
-		        else
-		        {
-		           cpuCount = require('os').cpus().length;
-		        }
+  if (req.headers['x-forwarded-for'])
+  {
+    ip = req.headers['x-forwarded-for'].split(",")[0];
+  }
+  else if(req.connection && req.connection.remoteAddress)
+  {
+    ip = req.connection.remoteAddress;
+  } 
+  else
+  {
+    ip = req.ip;
+  }
 
-		        for(var i=0;i<cpuCount;i++)
-		        {
-		            cluster.fork();
-		        }
+  /*
+      matching the ip address and status
+  */
 
-		        cluster.on('exit',()=>{
-		           cluster.fork();
-		        });
-			}
-			else
-			{
-				hasteObj.server = https.createServer(options);
-
-				hasteObj.server.on('request', (req, res) => {
-				  	process.nextTick(function()
-					{
-						handleRequest(req,res);
-					});
-				});
-
-				/*
-		            Http server configurations
-		        */
-
-		        hasteObj.server.on('connection',function(socket)
-		        { 
-		           socket.setTimeout(config.server.socketTimeout);
-		        });
-
-		        hasteObj.server.setTimeout(config.server.setTimeout);
-
-		        hasteObj.server.setMaxListeners(config.server.maxListeners);
-
-		        hasteObj.server.on('clientError', (err, socket) => {
-		           socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-		        });
-
-		        /*
-
-		           Server listening and closing the server
-
-		        */
-
-		       	hasteObj.server.listen(port,ip);
-
-		        if(callback == null)
-		        {
-		        	resolve(hasteObj.server);
-		        }
-		        else
-		        {
-		        	callback(hasteObj.server);
-		        }
-			}
-		}
-		catch(e)
-		{
-			reject(e);
-		}
-	});
-}
-
-async function handleHttpServer(ip,port,callback)
-{
-	return new Promise((resolve,reject)=>{
-
-		try
-		{
-			if(typeof(ip) != 'string' || typeof(port) != 'number')
-			{
-				console.error("IP and PORT cannot be empty",null);
-			}
-
-			var cpuCount = null;
-
-			if(cluster.isMaster)
-			{
-				if(typeof(config.server.cpuCores) != 'undefined' && typeof(config.server.cpuCores) == 'number')
-		        {
-		           cpuCount = config.server.cpuCores;
-		        }
-		        else
-		        {
-		           cpuCount = require('os').cpus().length;
-		        }
-
-		        for(var i=0;i<cpuCount;i++)
-		        {
-		            cluster.fork();
-		        }
-
-		        cluster.on('exit',()=>{
-		           cluster.fork();
-		        });
-			}
-			else
-			{
-				hasteObj.server = http.createServer();
-
-				hasteObj.server.on('request', (req, res) => {
-				  	process.nextTick(function()
-					{
-						handleRequest(req,res);
-					});
-				});
-
-				/*
-		            Http server configurations
-		        */
-
-		        hasteObj.server.on('connection',function(socket)
-		        { 
-		           socket.setTimeout(config.server.socketTimeout);
-		        });
-
-		        hasteObj.server.setTimeout(config.server.setTimeout);
-
-		        hasteObj.server.setMaxListeners(config.server.maxListeners);
-
-		        hasteObj.server.on('clientError', (err, socket) => {
-		           socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-		        });
-
-		        /*
-
-		           Server listening and closing the server
-
-		        */
-
-		       	hasteObj.server.listen(port,ip);
-
-		        if(callback == null)
-		        {
-		        	resolve(hasteObj.server);
-		        }
-		        else
-		        {
-		        	callback(hasteObj.server);
-		        }
-			}
-		}
-		catch(e)
-		{
-			reject(e);
-		}
-	});
-}
-
-async function getIpAddress(req,res)
-{
-    /*
-
-        Requiring IP address to get use ip address 
-
-    */
-
-    let getIpObject = require('../blockusers/IpAddress.js');
-
-    let ip;
-
-    if (hasteObj.req.headers['x-forwarded-for'])
+  if(getIpObject[ip])
+  {
+    if(!res.headersSent)
     {
-        ip = hasteObj.req.headers['x-forwarded-for'].split(",")[0];
-    }
-    else if(hasteObj.req.connection && hasteObj.req.connection.remoteAddress)
-    {
-        ip = hasteObj.req.connection.remoteAddress;
-    } 
-    else
-    {
-        ip = hasteObj.req.ip;
+      res.writeHead(404,hasteObj.header404);
     }
 
-    /*
-        matching the ip address and status
-    */
+    res.end('Something went wrong');
+    return false;
+  }
+}
 
-    if(getIpObject[ip])
+function serveStaticFiles(req,res,requestUri,ext)
+{
+  fs.exists(requestUri, function (exist)
+  {
+    if(!exist)
     {
-        if(!hasteObj.res.headersSent)
+      // if the file is not found, return 404
+      res.statusCode = 404;
+      res.end(`File ${requestUri} not found!`);
+      return;
+    }
+
+    fs.stat(requestUri,function(err,stat)
+    {
+      if(err)
+      {
+        renderErrorFiles(req,res,404);
+        return;
+      }
+
+      var modifiedDate = new Date(stat.mtimeMs).getTime();
+
+      if(!res.headersSent)
+      {
+        res.setHeader("Server","Node Server");
+        res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+        res.setHeader('ETag',modifiedDate);
+      }
+
+      if(typeof(req.headers['if-none-match']) != 'undefined')
+      {
+        if(req.headers['if-none-match'] == modifiedDate)
         {
-          hasteObj.res.writeHead(404,hasteObj.header404);
+          res.statusCode = 304;
+        }
+      }
+
+      var fileName = PATHNAME.basename(requestUri);
+
+      CachedFiles.staticFiles[fileName] = {};
+
+      CachedFiles.staticFiles[fileName].stat = stat;
+
+      fs.readFile(requestUri,function(err,data)
+      {
+        if(err)
+        {
+          renderErrorFiles(req,res,500);
+          return;
         }
 
-        hasteObj.res.end('Something went wrong');
-        return false;
-    }
+        CachedFiles.staticFiles[fileName].data = data;
+
+        res.end(data);
+      });
+
+    });
+
+  });
 }
 
-async function defaultHeaders(statuCode,headers)
-{
-	if(!hasteObj.res.headersSent)
-	{
-		hasteObj.res.writeHead(statuCode,headers);
-	}
-}
-
-async function handleRequest(req,res)
+function handleRequest(req,res)
 {
 	try
 	{
 		if(typeof(defaultMethod) != 'undefined')
-      	{
-        	defaultMethod(req,res);
-      	}
+  	{
+    	defaultMethod(req,res);
+  	}
 
-		hasteObj.req = req;
-	    hasteObj.res = res;
+    session.currentSession = '';
 
-	    session.currentSession = '';
+    getIpAddress(req,res);
 
-	    getIpAddress(hasteObj.req,hasteObj.res);
+    var heapUsuage = data = null;
 
-	    var heapUsuage = data = null;
+    heapUsuage = process.memoryUsage();
 
-	    heapUsuage = process.memoryUsage();
+    if(config.server.showHeapUsuage)
+    {
+     	console.error('Heap used '+heapUsuage['heapUsed'] +' | Heap total size: '+heapUsuage['heapTotal']);
+    }
 
-	    if(config.server.showHeapUsuage)
-	    {
-	     	console.error('Heap used '+heapUsuage['heapUsed'] +' | Heap total size: '+heapUsuage['heapTotal']);
-	    }
+    if(heapUsuage['heapUsed'] > heapUsuage['heapTotal'])
+    {
+      data = {
+        status:false,
+        msg:'Server is to busy'
+      };
 
-	    if(heapUsuage['heapUsed'] > heapUsuage['heapTotal'])
-	    {
-	      data = {
-	        status:false,
-	        msg:'Server is to busy'
-	      };
-	      hasteObj.res.end(JSON.stringify(data));
-	    }
+      res.end(JSON.stringify(data));
+    }
 
-	    hasteObj.req.on('error',function()
-	    {
-	      console.error('Error in server');
-	      return false;
-	    });
+    req.on('error',function()
+    {
+      console.error('Error in server');
+      return false;
+    });
 
-	    hasteObj.req.on("end", function()
-	    {
-	      // request ended normally
-	    });
+    req.on("end", function()
+    {
+      // request ended normally
+    });
 
-	    if(config.server.maintainance)
-	    {
-	      if(!hasteObj.res.headersSent)
-	      {
-	        hasteObj.res.setHeader("Keep-Alive","timeout=5, max=500");
-	        hasteObj.res.setHeader("Server","Node Server");
-	        hasteObj.res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
-	        hasteObj.res.setHeader("Content-Type","text/html");
-	      }
-	      
-	      var stat = await fileStat('./error_files/'+config.errorPages.MaintainancePage);
+    if(config.server.maintainance)
+    {
+      if(!res.headersSent)
+      {
+        res.setHeader("Server","Node Server");
+        res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+        res.setHeader("Content-Type","text/html");
+      }
+      
+      var readerStream = fs.createReadStream(__rootdir+'/error_files/'+config.errorPages.MaintainancePage);
 
-	      if(stat == undefined)
-	      {
-	      	return;
-	      }
+      readerStream.on('error', function(error)
+      {
+        res.writeHead(404, 'Not Found');
+      	res.end();
+      });
 
-	      var modifiedDate = new Date(stat.mtimeMs).getTime();
+      readerStream.on('open', function()
+      {
+        readerStream.pipe(res);
+      });
 
-	      if(typeof(hasteObj.req.headers['if-none-match']) == 'undefined')
-	      {
-	        hasteObj.res.setHeader('ETag',modifiedDate);
-	        hasteObj.res.statusCode = 200;
-	      }
-	      else
-	      {
-	        hasteObj.res.setHeader('ETag',modifiedDate);
-	        if(hasteObj.req.headers['if-none-match'] != modifiedDate)
-	        {
-	          hasteObj.res.statusCode = 200;
-	        }
-	        else
-	        {
-	          hasteObj.res.statusCode = 304;
-	        }
-	      }
+      readerStream.on('end',function()
+      {
+        readerStream.destroy();
+      });
 
-	      var readerStream = await readFiles('./error_files/'+config.errorPages.MaintainancePage);
+      return false;
+    }
 
-	      readerStream.on('error', function(error)
-	      {
-            hasteObj.res.writeHead(404, 'Not Found');
-        	hasteObj.res.end();
-          });
+    let requestMethod = req.method;
 
-	      readerStream.pipe(hasteObj.res);
+  	let requestUri = url_module.parse(req.url).pathname;
 
-	      hasteObj.res.on("end",function()
-	      {
-	        readerStream.destroy();
-	      });
+  	let ext = (/[.]/.exec(requestUri)) ? /[^.]+$/.exec(requestUri) : undefined;
 
-	      return false;
-	    }
+  	let myExp;
 
-	  
-        let requestMethod = hasteObj.req.method;
+  	let notMatchCount = 0;
 
-      	let requestUri = url_module.parse(hasteObj.req.url).pathname;
+  	let tempMapping = '';
 
-      	let ext = (/[.]/.exec(requestUri)) ? /[^.]+$/.exec(requestUri) : undefined;
+  	let uriListLen = 0;
 
-      	let myExp;
+    if(ext != undefined)
+    {
+      try
+      {
+        // checking for static files and have access to that folder
 
-      	let notMatchCount = 0;
+        var blockDirectory = false;
 
-      	let tempMapping = '';
-
-      	let uriListLen = 0;
-
-      	/*
-
-          getting global object length to know if any routes is created
-
-        */
-
-        if(requestMethod == "GET")
+        if(hasteObj.staticPath.length > 0)
         {
-        	uriListLen = Object.keys(hasteObj.globalGETObject).length;
+          for(var i in hasteObj.staticPath)
+          {
+            url = hasteObj.staticPath[i].replace('/',"\\/");
 
-        	hasteObj.globalObject = hasteObj.globalGETObject;
-        }
-        else if(requestMethod == "POST")
-        {
-        	uriListLen = Object.keys(hasteObj.globalPOSTObject).length;
+            myExp = new RegExp(url+"[a-z0-9A-Z\.]*","i");
 
-        	hasteObj.globalObject = hasteObj.globalPOSTObject;
+            var formatNotFound = false;
+
+            if(requestUri.match(myExp))
+            {
+              blockDirectory = true;
+              break;
+            }
+          }
         }
 
+        if(blockDirectory == true || mimeList[PATHNAME.extname(ext['input'])] == undefined)
+        {
+          renderErrorFiles(req,res,403);
+        }
+        else
+        {
+          var fileName = PATHNAME.basename(requestUri);
+
+          if(config.cache.staticFiles)
+          {
+            if(CachedFiles.staticFiles[fileName] == undefined)
+            {
+              serveStaticFiles(req,res,__rootdir+requestUri,ext);
+            }
+            else
+            {
+              var modifiedDate = new Date(CachedFiles.staticFiles[fileName].stat.mtimeMs).getTime();
+
+              if(!res.headersSent)
+              {
+                res.setHeader("Server","Node Server");
+                res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+                res.setHeader('ETag',modifiedDate);
+              }
+
+              if(typeof(req.headers['if-none-match']) != 'undefined')
+              {
+                if(req.headers['if-none-match'] == modifiedDate)
+                {
+                  res.statusCode = 304;
+                }
+              }
+
+              res.end(CachedFiles.staticFiles[fileName].data);
+            }
+          } 
+          else
+          {
+            serveStaticFiles(req,res,__rootdir+requestUri,ext);
+          }
+        }
+      }
+      catch(e)
+      {
+        console.error(e);
+
+        renderErrorFiles(req,res,500);
+      }
+
+      return;
+    }
+
+    /*
+      Cortex Concept for accessing apis more directly and easily
+    */
+
+    if(requestUri == '/cortex')
+    {
+      if(requestMethod == 'POST')
+      {
+        parsePOST(req,res);
+      }
+      else
+      {
+        res.setHeader("Server","Node Server");
+        res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+        res.end("Cortex method does not support other request method");
+        console.error("Cortex method does not support other request method");
+      }
+
+      return;
+    }
+
+  	/*
+
+      getting global object length to know if any routes is created
+
+    */
+
+    if(requestMethod == "GET")
+    {
+    	uriListLen = Object.keys(hasteObj.globalGETObject).length;
+
+    	hasteObj.globalObject = hasteObj.globalGETObject;
+    }
+    else if(requestMethod == "POST")
+    {
+    	uriListLen = Object.keys(hasteObj.globalPOSTObject).length;
+
+    	hasteObj.globalObject = hasteObj.globalPOSTObject;
+    }
+
+    /*
+
+      if length is zero error is thrown to created a route
+
+    */
+
+    if(uriListLen == 0)
+    {
+      res.setHeader("Server","Node Server");
+      res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+  	  res.end("Please create a route");
+      console.error('Please create a route');
+      return false;
+    }
+
+    if(ext == undefined)
+    {
+      /*
+
+        if extention is undefined then its url api request else static file request
+
+      */
+
+      /*
+
+        Iterating through the whole object
+
+      */
+
+      for(obj in hasteObj.globalObject)
+      {
         /*
-
-          if length is zero error is thrown to created a route
-
+          Iterating through object in to match uri and parse request accordingly            
         */
 
-        if(uriListLen == 0)
+        myExp = new RegExp('^'+hasteObj.globalObject[obj]["regex"]+'$');
+
+        if(requestUri.match(myExp) && requestMethod == hasteObj.globalObject[obj]['request_type'])
         {
-          hasteObj.res.setHeader("Keep-Alive","timeout=5, max=500");
-	      hasteObj.res.setHeader("Server","Node Server");
-		  hasteObj.res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
-      	  res.end("Please create a route");
-          console.error('Please create a route');
-          return false;
+          let requestUriArr = requestUri.split('/');
+
+          let matchedArr = hasteObj.globalObject[obj]["uri"].split('/');
+
+          let matchedArrLen = matchedArr.length;
+
+          for(let mat=1;mat<matchedArrLen;mat++)
+          {
+            hasteObj.input[matchedArr[mat]] = requestUriArr[mat];
+          }
+
+          if(requestMethod == "GET")
+          {
+            parseGET(req,res,obj);
+          }
+          else if(requestMethod == "POST")
+          {
+            parsePOST(req,res,obj);
+          }
+          else
+          {
+            res.end("server not available, for other rest methods");
+          }
+
+          break;
+
         }
+        else
+        {
+          notMatchCount += 1;
+        }
+      }
 
-      	/*
-	        Cortex Concept for accessing apis more directly and easily
-	    */
 
-	    if(requestUri == '/cortex')
-      	{
-      		if(requestMethod == 'POST')
-      		{
-      			var parseCb = await parsePOST(hasteObj.req).catch(function(error)
-      			{
-      				console.error(error);
-      			});
-      		}
-      		else if(requestMethod == "GET")
-      		{
-      			hasteObj.res.setHeader("Keep-Alive","timeout=5, max=500");
-			    hasteObj.res.setHeader("Server","Node Server");
-			    hasteObj.res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
-      			res.end("Cortex method does not support GET request");
-      			console.error("Cortex method does not support GET request");
-      			return;
-      		}
-      		else
-      		{
-      			var parseCb = {
-      				status:false
-      			};
-      		}
-	        
-	        if(parseCb != undefined && parseCb.status)
-	        {
-	          hasteObj.input['requestData'] = parseCb.data;
+      /*
 
-	          try
-	          {
-	            if(requestMethod == 'POST')
-	            {
-	            	var mapping = hasteObj.input['requestData']['mapping'];
-	            	var cortex = hasteObj.input['requestData']['cortex'];
-	            }
-	            else
-	            {
-	            	var mapping = hasteObj.input['query']['mapping'];
-	            	var cortex = hasteObj.input['query']['cortex'];
-	            }
+        If no match is found then 404 error is thrown
 
-	            if(cortex == undefined || cortex == "" || cortex == null)
-	            {
-	            	console.error("No cortex method found");
-	            	return;
-	            }
+      */
 
-	            if(typeof(mapping) != 'undefined' && mapping != '')
-	            {
-	              tempMapping = mapping.split('.');
-	              tempMapping = tempMapping.join('/');
-	            }
-
-	            var stat = await fileStat('./controllers/'+tempMapping+'/'+cortex+'.js');
-
-	            if(stat != undefined && stat.isFile())
-	            {
-	              var controller = require('../controllers/'+tempMapping+'/'+cortex+'.js');
-
-	              controller.init(req,res,hasteObj.input);
-	            }
-	            else
-	            {
-	              console.error('Controller must me a javascript file'); 
-	            }
-
-	          }
-	          catch(e)
-	          {
-
-	            if(!hasteObj.res.headersSent)
-	            {
-	              hasteObj.res.writeHead(404,hasteObj.header404);
-	            }
-	            
-	            var readerStream = await readFiles('./error_files/'+config.errorPages.PageNotFound);
-
-	            readerStream.on('error', function(error)
-		      	{
-		            hasteObj.res.writeHead(404, 'Not Found');
-	            	hasteObj.res.end();
-	          	});
-
-	            readerStream.pipe(res);
-
-	            res.on("end",function()
-	            {
-	              readerStream.destroy();
-	            });
-
-	            console.error(e);
-	            return false;
-
-	          }
-	        }
-	        else
-	        {
-	          hasteObj.res.writeHead(500,hasteObj.header500);
-
-	          hasteObj.res.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
-
-	          return; 
-	        }
-
-	        return false;
-      	}
-
-
-      	/*
-
-        	checking for extention of the request
-
-      	*/
-
-
-
-      	if(ext == undefined)
-      	{
-	        /*
-
-	          if extention is undefined then its url api request else static file request
-
-	        */
-
-	        /*
-
-	          Iterating through the whole object
-
-	        */
-
-	        for(obj in hasteObj.globalObject)
-	        {
-	          /*
-	            Iterating through object in to match uri and parse request accordingly            
-	          */
-
-	            myExp = new RegExp('^'+hasteObj.globalObject[obj]["regex"]+'$');
-
-	            if(requestUri.match(myExp) && requestMethod == hasteObj.globalObject[obj]['request_type'])
-	            {
-	              let requestUriArr = requestUri.split('/');
-
-	              let matchedArr = hasteObj.globalObject[obj]["uri"].split('/');
-
-	              let matchedArrLen = matchedArr.length;
-
-	              for(let mat=1;mat<matchedArrLen;mat++)
-	              {
-	                hasteObj.input[matchedArr[mat]] = requestUriArr[mat];
-	              }
-
-	              switch(requestMethod)
-	              {
-
-	                case "GET":
-
-		                var parseCb = await parseGET(hasteObj.req).catch(function(error)
-		      			{
-		      				console.error(error);
-		      			});
-
-		                if(parseCb != undefined && parseCb.status)
-		                {
-		                    hasteObj.input['requestData'] = parseCb.data;
-
-		                    modules(hasteObj.req,hasteObj.res,hasteObj,obj).catch(function(error)
-			      			{
-			      				console.error(error);
-			      			});
-		                }
-		                else
-		                {
-		                    hasteObj.res.writeHead(500,hasteObj.header500);
-
-		                    hasteObj.res.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
-		                }
-
-		                break;
-
-	                case "POST":
-
-	                  	var parseCb = await parsePOST(hasteObj.req).catch(function(error)
-		      			{
-		      				console.error(error);
-		      			});
-
-	                  	if(parseCb != undefined && parseCb.status)
-		                {
-		                    hasteObj.input['requestData'] = parseCb.data;
-
-		                    modules(hasteObj.req,hasteObj.res,hasteObj,obj).catch(function(error)
-			      			{
-			      				console.error(error);
-			      			});
-		                }
-	                  	else
-	                  	{
-	                    	hasteObj.res.writeHead(500,hasteObj.header500);
-
-	                    	hasteObj.res.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
-	                  	}
-
-	                  	break;
-
-	                default:
-	                	hasteObj.res.writeHead(404,hasteObj.header404);
-	                    hasteObj.res.end(JSON.stringify({status:false,msg:"Failed to parse request"}));
-	                	console.error('Invalid Request');
-	              }
-	              break;
-
-	            }
-	            else
-	            {
-	              notMatchCount += 1;
-	            }
-	        }
-
-
-	        /*
-
-	          If no match is found then 404 error is thrown
-
-	        */
-
-	        if(notMatchCount == uriListLen)
-	        {
-	            if(!hasteObj.res.headersSent)
-	            {
-	              hasteObj.res.writeHead(404,hasteObj.header404);
-	            }
-
-	            var readerStream = await readFiles('./error_files/'+config.errorPages.PageNotFound);
-
-	            readerStream.on('error', function(error)
-		      	{
-		            hasteObj.res.writeHead(404, 'Not Found');
-	            	hasteObj.res.end();
-	          	});
-
-	           readerStream.pipe(hasteObj.res);
-
-	           hasteObj.res.on("end",function()
-	           {
-	             readerStream.destroy();
-	           });
-
-	           return false;
-	        }
-      	}
-      	else
-      	{
-	        try
-	        {
-	          // checking for static files and have access to that folder
-
-	          let staticFilelength = (hasteObj.staticPath == '') ? 0 : hasteObj.staticPath.length;
-
-	          let notMatchCount = 0;
-
-	          for(var i=0; i<staticFilelength; i++)
-	          {
-	            url = hasteObj.staticPath[i].replace('/',"\\/");
-
-	            myExp = new RegExp(url+"[a-z0-9A-Z\.]*","i");
-
-	            if(requestUri.match(myExp))
-	            {
-	              switch(PATHNAME.extname(ext['input']))
-	              {
-	                case '.css': hasteObj.res.setHeader("Content-Type", "text/css");
-
-	                break;
-
-	                case '.ico' : hasteObj.res.setHeader("Content-Type","image/ico");
-
-	                break;
-
-	                case '.js' : hasteObj.res.setHeader("Content-Type", "text/javascript");
-
-	                break;
-
-	                case '.jpeg' : hasteObj.res.setHeader("Content-Type", "image/jpg");
-
-	                break;
-
-	                case '.jpg' : hasteObj.res.setHeader("Content-Type", "image/jpg");
-
-	                break;
-
-	                case '.png' : hasteObj.res.setHeader("Content-Type", "image/png");
-
-	                break;
-
-	                case '.gif' : hasteObj.res.setHeader("Content-Type", "image/gif");
-
-	                break;
-
-	                case '.json' : hasteObj.res.setHeader("Content-Type", "application/json");
-
-	                break;
-
-	                case '.pdf' : hasteObj.res.setHeader("Content-Type", "application/pdf");
-
-	                break;
-
-	                case '.ttf' : hasteObj.res.setHeader("Content-Type", "application/octet-stream");
-
-	                break;
-
-	                case '.html' : hasteObj.res.setHeader("Content-Type", "text/html");
-
-	                break;
-
-	                case '.woff' : hasteObj.res.setHeader("Content-Type", "application/x-font-woff");
-
-	                break;
-
-	                default : 
-	                	hasteObj.res.setHeader("Content-Type", "text/plain");
-	                	continue;
-
-	              }
-
-	              var stat = await fileStat('./'+requestUri);
-
-	              if(stat != undefined && stat.isFile())
-	              {
-	                if(!hasteObj.res.headersSent)
-	                {
-	                	var now = new Date();
-		                now.setDate(now.getDate()+14);
-		                hasteObj.res.setHeader("Keep-Alive","timeout=5, max=500");
-		                hasteObj.res.setHeader("Server","Node Server");
-		                hasteObj.res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
-		                hasteObj.res.setHeader("Expires",now);
-
-		                var modifiedDate = new Date(stat.mtimeMs).getTime();
-		                hasteObj.res.setHeader('ETag',modifiedDate);
-	                }
-
-	                if(typeof(hasteObj.req.headers['if-none-match']) == 'undefined')
-	                {
-	                  
-	                  hasteObj.res.statusCode = 200;
-	                }
-	                else
-	                {
-	                  if(hasteObj.req.headers['if-none-match'] != modifiedDate)
-	                  {
-	                    hasteObj.res.statusCode = 200;
-	                  }
-	                  else
-	                  {
-	                    hasteObj.res.statusCode = 304;
-	                  }
-	                }
-
-	                readerStream = await readFiles('./'+requestUri);
-
-	                readerStream.on('error', function(error)
-				    {
-			            hasteObj.res.writeHead(404, 'Not Found');
-		            	hasteObj.res.end();
-			        });
-	                
-	                if(config.compression.gzip == false)
-	                {
-	                  readerStream.pipe(hasteObj.res);
-	                  hasteObj.res.on("end",function()
-	                  {
-	                    readerStream.destroy();
-	                  });
-	                }
-	                else
-	                {
-	                  hasteObj.res.setHeader('content-encoding','gzip');
-	                  readerStream.pipe(hasteObj.AllowModules.zlib.createGzip()).pipe(hasteObj.res);
-	                  hasteObj.res.on("end",function()
-	                  {
-	                    readerStream.destroy();
-	                  });
-	                }
-	              }
-	              else
-	              {
-	                if(!hasteObj.res.headersSent)
-	                {
-	                  hasteObj.res.writeHead(404,hasteObj.header404);
-	                }
-	                
-	                var readerStream = await readFiles('./error_files/'+config.errorPages.PageNotFound);
-
-	                readerStream.on('error', function(error)
-				    {
-			            hasteObj.res.writeHead(404, 'Not Found');
-		            	hasteObj.res.end();
-			        });
-
-	                readerStream.pipe(hasteObj.res);
-	                hasteObj.res.on("end",function()
-	                {
-	                  readerStream.destroy();
-	                });
-	              }
-
-	              break;
-
-	            }
-	            else
-	            {
-	              notMatchCount += 1;
-	            }
-	          }
-
-	          // if no match found 404 error is thrown
-
-	          if(notMatchCount == staticFilelength)
-	          {
-
-	            if(!hasteObj.res.headersSent)
-	            {
-	              hasteObj.res.writeHead(403,hasteObj.header403);
-	            }
-	            
-	            var readerStream = await readFiles('./error_files/'+config.errorPages.DirectoryAccess);
-
-	            readerStream.on('error', function(error)
-		      	{
-		            hasteObj.res.writeHead(404, 'Not Found');
-	            	hasteObj.res.end();
-	          	});
-
-	            readerStream.pipe(hasteObj.res);
-
-	            hasteObj.res.on("end",function()
-	            {
-	                readerStream.destroy();
-	            });
-
-	            return false;
-	          }
-
-	        }
-	        catch(e)
-	        {
-	          console.error(e);
-	          if(!hasteObj.res.headersSent)
-	          {
-	            hasteObj.res.writeHead(500,hasteObj.header500);
-	          }
-	          
-		      var readerStream = await readFiles('./error_files/'+config.errorPages.InternalServerError);
-
-		      readerStream.on('error', function(error)
-		      {
-	            hasteObj.res.writeHead(404, 'Not Found');
-            	hasteObj.res.end();
-	          });
-
-		      readerStream.pipe(hasteObj.res);
-
-		      hasteObj.res.on("end",function()
-		      {
-		        readerStream.destroy();
-		      });
-
-		      return false;
-	        }
-      	}
+      if(notMatchCount == uriListLen)
+      {
+        renderErrorFiles(req,res,404);
+      }
+    }
 	}
 	catch(e)
 	{
@@ -1506,143 +1152,173 @@ async function handleRequest(req,res)
 	}
 }
 
-async function readFiles(fileName)
-{
-	return new Promise((resolve,reject)=>{
-		try
-		{
-			var readerStream = fs.createReadStream(fileName);
-    		resolve(readerStream);
-		}
-		catch(e)
-		{
-			reject(e);
-			console.error(e);
-		}
-	});
-}
-
-async function parseGET(req)
+function parseGET(req,res,obj)
 {
   // parse get request
-  return new Promise((resolve,reject)=>{
-    try
-    {
-    	var url_parsed = url_module.parse(hasteObj.req.url,true);
-    	resolve({status:true,data:url_parsed['query']});  
-    }
-    catch(e)
-    {
-    	console.error(e);
-    	reject({status:false,msg:"Failed to parse get request"});
-    	console.error("Failed to parse get request");
-    }
-  });
+  try
+  {
+    var url_parsed = url_module.parse(req.url,true);
+    
+    hasteObj.input['requestData'] = url_parsed['query'];
+
+    modules(req,res,obj);
+
+  }
+  catch(e)
+  {
+    console.error(e);
+    console.error("Failed to parse get request");
+  }
 }
 
-async function parsePOST(req)
+function parsePOST(req,res,obj)
 {
-	return new Promise((resolve,reject)=>{
+	if(typeof(req.headers['content-type']) != 'undefined')
+  {
+    // parse post request 
 
-		if(typeof(hasteObj.req.headers['content-type']) != 'undefined')
+    if((req.method == 'POST' &&  req.headers['content-type'].match(/(multipart\/form\-data\;)/g)))
+    {
+      try
+      {
+        var form = new hasteObj.AllowModules.multiparty.Form();
+
+        form.parse(req,function(err,fields,files)
         {
-          // parse post request 
-
-          if((hasteObj.req.method == 'POST' &&  hasteObj.req.headers['content-type'].match(/(multipart\/form\-data\;)/g)))
+          if(err)
           {
-            try
-            {
-              var form = new this.AllowModules.multiparty.Form();
+            console.error(err);
+            return;
+          }
 
-              form.parse(req,function(err,fields,files)
-              {
-              	if(err)
-              	{
-              		reject(err);
-              		console.error(err);
-              		return;
-              	}
+          var bindkey = {
+            fields:fields,
+            files:files
+          };
 
-                var bindkey = {
-                  fields:fields,
-                  files:files
-                };
+          hasteObj.input['requestData'] = bindkey;
 
-                resolve({status:true,data:bindkey});
-
-              });
-
-            }
-            catch(e)
-            {
-              reject({status:false,msg:'Please install multiparty {npm install multiparty}'});
-              console.error('Please install multiparty {npm install multiparty}');
-            }
-
+          if(obj == undefined)
+          {
+            processRequest(req,res);
           }
           else
           {
-            var body = '';
-            hasteObj.req.on('data',function(data)
-            {
-              body += data;
-            });
+            modules(req,res,obj);
+          }
 
-            hasteObj.req.on('end',function()
+        });
+
+      }
+      catch(e)
+      {
+        console.error('Please install multiparty {npm install multiparty}');
+      }
+
+    }
+    else
+    {
+      var body = '';
+      req.on('data',function(data)
+      {
+        body += data;
+      });
+
+      req.on('end',function()
+      {
+        if(req.headers['content-type'] == 'application/json')
+        {
+          try
+          {
+            var jsonData = JSON.parse(body);
+
+            hasteObj.input['requestData'] = jsonData;
+
+            if(obj == undefined)
             {
-              if(hasteObj.req.headers['content-type'] == 'application/json')
-              {
-                try
-                {
-                  var jsonData = JSON.parse(body);
-                  resolve({status:true,data:jsonData});
-                }
-                catch(e)
-                {
-                  console.error(e);
-                  reject({status:false,msg:e.stack.toString()});
-                  console.error(e.stack.toString());
-                }
-              }
-              else
-              {
-                resolve({status:true,data:qs.parse(body)});
-              }
-            });
+              processRequest(req,res,);
+            }
+            else
+            {
+              modules(req,res,obj);
+            }
+          }
+          catch(e)
+          {
+            console.error(e);
           }
         }
         else
         {
-        	reject({status:false,msg:'No content-type header is present in the request'});
-        	console.error('No content-type header is present in the request');
+          hasteObj.input['requestData'] = qs.parse(body);
+
+          if(obj == undefined)
+          {
+            processRequest(req,res);
+          }
+          else
+          {
+            modules(req,res,obj);
+          }
         }
-	});
+      });
+    }
+  }
+  else
+  {
+    console.error('No content-type header is present in the request');
+  }
 }
 
-async function fileStat(filePath)
+function processRequest(req,res)
 {
-	return new Promise((resolve,reject)=>{
-		fs.stat(filePath,function(err,result)
-		{
-			if(err)
-			{
-				reject(err);
-			}
-			else
-			{
-				resolve(result);
-			}
-		});
-	});	
+  if(req.method == 'POST')
+  {
+    var mapping = hasteObj.input['requestData']['mapping'];
+    var cortex = hasteObj.input['requestData']['cortex'];
+  }
+  else
+  {
+    var mapping = hasteObj.input['query']['mapping'];
+    var cortex = hasteObj.input['query']['cortex'];
+  }
+
+  var tempMapping = '';
+
+  if(cortex == undefined || cortex == "" || cortex == null)
+  {
+    console.error("No cortex method found");
+    return;
+  }
+
+  if(typeof(mapping) != 'undefined' && mapping != '')
+  {
+    tempMapping = mapping.split('.');
+    tempMapping = tempMapping.join('/');
+  }
+
+  fs.stat(__rootdir+'/controllers/'+tempMapping+'/'+cortex+'.js',function(err,stat)
+  { 
+    if(err)
+    {
+      console.error('Controller must me a javascript file'); 
+      return;
+    }
+
+    var controller = require(__rootdir+'/controllers/'+tempMapping+'/'+cortex+'.js');
+
+    controller.init(req,res,hasteObj.input);
+
+  });
 }
 
 function GlobalException(message,stack)
 {
-   this.message = message;
-   this.stack = stack;
+  this.message = message;
+  this.stack = stack;
 }
 
-async function closeConnection(message)
+function closeConnection(message)
 {
 	if(message !== "Exception")
 	{
@@ -1651,11 +1327,273 @@ async function closeConnection(message)
 		{
 			hasteObj.server.close();
 		}
+
+    if(hasteObj.socket != null)
+    {
+      hasteObj.socket.end();
+    }
+
 		console.log("#######################################################################");
 		console.log("Server closed");
 		process.exit(0);
 	}
 }
+
+
+
+function renderPage(req,res,Render,page,code = null,headers = null,compression = null)
+{
+  // zip compression
+
+  if(compression != null)
+  {
+    res.setHeader('content-encoding','gzip');
+  }
+
+  if(typeof(Render) == 'object' && !Array.isArray(Render))
+  {
+    try
+    {
+      /*
+        Checks for file existence using synchronous file reader
+      */
+
+      if(config.cache.Document)
+      {
+        if(CachedFiles.staticFiles[page] == undefined)
+        {
+          serveDocumentFile(req,res,Render,page,code,headers,compression);
+        }
+        else
+        {
+          var modifiedDate = new Date(CachedFiles.staticFiles[page].stat.mtimeMs).getTime();
+
+          if(headers == null)
+          {
+            if(!res.headersSent)
+            {
+              res.setHeader("Server","Node Server");
+              res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+              res.setHeader('Content-Type','text/html');
+              res.setHeader('ETag',modifiedDate);
+            }
+
+            if(hasteObj.cookieStatus)
+            {
+              res.setHeader("Set-Cookie",hasteObj.cookieStatus);
+            }
+
+            if(hasteObj.maintainanceStat != config.server.maintainance)
+            {
+              hasteObj.maintainanceStat = config.server.maintainance;
+            }
+            else
+            {
+              if(typeof(req.headers['if-none-match']) != 'undefined')
+              {
+                if(req.headers['if-none-match'] == modifiedDate)
+                {
+                  res.statusCode = 304;
+                }
+              }
+            }
+          }
+
+          res.end(CachedFiles.staticFiles[page].data);
+        }
+      }
+      else
+      {
+        serveDocumentFile(req,res,Render,page,code,headers,compression);
+      }
+    }
+    catch(e)
+    {
+      console.log(e);
+    }
+  }
+  else
+  {
+    console.error('Render variable must be an object');
+  }
+}
+
+function serveDocumentFile(req,res,Render,page,code,headers,compression)
+{
+  let pathname = PATHNAME.join(__rootdir, "/views/"+page+'.html');
+
+  fs.stat(pathname, function(err,stat)
+  {
+    if(err)
+    {
+      renderErrorFiles(req,res,404);  
+      return;
+    }
+
+    var modifiedDate = new Date(stat.mtimeMs).getTime();
+
+    CachedFiles.staticFiles[page] = {
+      stat:stat
+    };
+
+    if(stat.isDirectory())
+    {
+      pathname += '/index.html';
+    }
+
+    var data = '';
+
+    var readerStream = fs.createReadStream(pathname);
+
+    readerStream.on('data', function(chunk)
+    {
+      data += chunk;
+    });
+
+    readerStream.on('end',function()
+    {
+      CachedFiles.staticFiles[page].data = data;
+
+      readerStream.destroy();
+
+      for(var key in Render)
+      { 
+        regexData = new RegExp(key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'),"g");
+
+        data = data.replace(regexData, Render[key]);
+      }
+
+      data = Buffer.from(data, "binary");
+
+      if(headers == null)
+      {
+
+        if(!res.headersSent)
+        {
+          res.setHeader("Server","Node Server");
+          res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+          res.setHeader('Content-Type','text/html');
+          res.setHeader('ETag',modifiedDate);
+        }
+
+        if(hasteObj.cookieStatus)
+        {
+          res.setHeader("Set-Cookie",hasteObj.cookieStatus);
+        }
+
+        if(hasteObj.maintainanceStat != config.server.maintainance)
+        {
+          hasteObj.maintainanceStat = config.server.maintainance;
+        }
+        else
+        {
+          if(typeof(req.headers['if-none-match']) != 'undefined')
+          {
+            if(req.headers['if-none-match'] == modifiedDate)
+            {
+              res.statusCode = 304;
+            }
+          }
+        }
+      }
+      else
+      {
+        res.writeHead(code,headers);
+      }
+
+      res.end(data);
+    });
+
+    readerStream.on('error',function()
+    {
+      renderErrorFiles(req,res,404);
+    });
+
+  });
+}
+
+function renderErrorFiles(req,res,statusCode)
+{
+  if(statusCode === 404)
+  {
+    if(!res.headersSent)
+    {
+      res.writeHead(statusCode,hasteObj.header404);
+    }
+
+    if(config.cache.staticFiles)
+    {
+      res.end(CachedFiles.staticFiles.File404.data);
+    } 
+    else
+    {
+      fs.readFile(__rootdir+'/error_files/'+config.errorPages.PageNotFound, function(err, data)
+      {
+        if(err)
+        {
+          console.error(err);
+        }
+        else
+        {
+          res.end(data);
+        }
+      });
+    }
+  }
+  else if(statusCode === 500)
+  {
+    if(!res.headersSent)
+    {
+      res.writeHead(statusCode,hasteObj.header500);
+    }
+
+    if(config.cache.staticFiles)
+    {
+      res.end(CachedFiles.staticFiles.File500.data);
+    } 
+    else
+    {
+      fs.readFile(__rootdir+'/error_files/'+config.errorPages.InternalServerError, function(err, data)
+      {
+        if(err)
+        {
+          console.error(err);
+        }
+        else
+        {
+          res.end(data);
+        }
+      });
+    }
+  }
+  else if(statusCode === 403)
+  {
+    if(!res.headersSent)
+    {
+      res.writeHead(statusCode,hasteObj.header403);
+    }
+
+    if(config.cache.staticFiles)
+    {
+      res.end(CachedFiles.staticFiles.File403.data);
+    } 
+    else
+    {
+      fs.readFile(__rootdir+'/error_files/'+config.errorPages.DirectoryAccess, function(err, data)
+      {
+        if(err)
+        {
+          console.error(err);
+        }
+        else
+        {
+          res.end(data);
+        }
+      });
+    }
+  }
+}
+
 
 let session = {
   currentSession:'',
@@ -1663,11 +1601,11 @@ let session = {
   {
     // if cookie is not undefined
 
-    if(typeof(hasteObj.req.headers.cookie) != 'undefined')
+    if(typeof(req.headers.cookie) != 'undefined')
     {
       // getting the number of session cookie
 
-      var sessionCookie = hasteObj.req.headers.cookie;
+      var sessionCookie = req.headers.cookie;
       sessionCookie = sessionCookie.split(';');
       var sessionCookieLen = sessionCookie.length;
       var nullCount = 0;
@@ -1726,7 +1664,7 @@ let session = {
         // setting value to the object
         sessionObj[session.currentSession][key] = value;
         sessionObj[session.currentSession]['time'] = new Date();
-        hasteObj.res.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
+        res.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
       }
     }
     else
@@ -1751,13 +1689,13 @@ let session = {
         sessionObj[session.currentSession]['time'] = new Date();
       }
 
-      hasteObj.res.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
+      res.setHeader('Set-Cookie','HASTESSID='+session.currentSession);
     }
   },
   get:function(key)
   {
     // getting the cookie headers
-    var sessionValue = hasteObj.req.headers.cookie;
+    var sessionValue = req.headers.cookie;
 
     // if the cookie header is not empty
 
@@ -1765,11 +1703,11 @@ let session = {
     {
       // if cookie is not undefined
 
-      if(typeof(hasteObj.req.headers.cookie) != 'undefined')
+      if(typeof(req.headers.cookie) != 'undefined')
       {
         // getting the length of the cookie
 
-        var sessionCookie = hasteObj.req.headers.cookie;
+        var sessionCookie = req.headers.cookie;
         sessionCookie = sessionCookie.split(';');
         var sessionCookieLen = sessionCookie.length;
         var nullCount = 0;
@@ -1830,13 +1768,13 @@ let session = {
   },
   del:function(key)
   {
-    var sessionValue = hasteObj.req.headers.cookie;
+    var sessionValue = req.headers.cookie;
     if(sessionValue != '')
     {
       // if cookie is found
-      if(typeof(hasteObj.req.headers.cookie) != 'undefined')
+      if(typeof(req.headers.cookie) != 'undefined')
       {
-        var sessionCookie = hasteObj.req.headers.cookie;
+        var sessionCookie = req.headers.cookie;
         sessionCookie = sessionCookie.split(';');
         var sessionCookieLen = sessionCookie.length;
         var nullCount = 0;
@@ -1885,13 +1823,13 @@ let session = {
   },
   destroy:function()
   {
-    var sessionValue = hasteObj.req.headers.cookie;
+    var sessionValue = req.headers.cookie;
     if(sessionValue != '')
     {
       // if cookie is found
-      if(typeof(hasteObj.req.headers.cookie) != 'undefined')
+      if(typeof(req.headers.cookie) != 'undefined')
       {
-        var sessionCookie = hasteObj.req.headers.cookie;
+        var sessionCookie = req.headers.cookie;
         sessionCookie = sessionCookie.split(';');
         var sessionCookieLen = sessionCookie.length;
         var nullCount = 0;
@@ -1907,7 +1845,7 @@ let session = {
             {
               sessionObj[sessionCookie[i][1]] = null;
               delete sessionObj[sessionCookie[i][1]];
-              hasteObj.res.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
+              res.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
               
               return true;
             }
@@ -1939,7 +1877,7 @@ let session = {
           sessionObj[this.currentSession] = null;
           delete sessionObj[this.currentSession];
           this.currentSession = '';
-          hasteObj.res.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
+          res.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
           return true;
         }
         else
@@ -1957,7 +1895,7 @@ let session = {
         sessionObj[this.currentSession] = null;
         delete sessionObj[this.currentSession];
         this.currentSession = '';
-        hasteObj.res.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
+        res.setHeader('Set-Cookie','HASTESSID=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT');
         return true;
       }
       else
@@ -1994,695 +1932,6 @@ let session = {
   }
 };
 
-async function writeLogs(path,data,callback = null)
-{
-    return new Promise((resolve,reject)=>{
-    	fs.open(path, 'w', function(err, fd)
-	    {
-	        if(err)
-	        {
-	            reject({err:err,status:false});
-	        }
-
-	        fs.write(fd, data,function(err)
-	        {
-	            if(err)
-	            {
-	                reject({err:err,status:false});
-	            }
-	            else
-	            {
-	                fs.close(fd, function()
-	                {
-	                    resolve({msg:'Write successfully',status:true});
-	                });
-	            }
-	        });
-	    });
-    }); 
-}
-
-async function Authorization(req)
-{
-    return new Promise((resolve,reject)=>{
-    	try
-	    {
-	        let auth = hasteObj.req.headers['authorization'].split(' ')[1];
-
-	        let decodedHeader = new Buffer(auth, 'base64').toString();
-
-	        decodedHeader = decodedHeader.split(':');
-
-	        resolve(decodedHeader);
-
-	    }
-	    catch(e)
-	    {
-	        reject(e);
-	    }
-    });
-}
-
-
-
-// getting cookies
-
-async function getCookies(req)
-{
-    return new Promise((resolve,reject)=>{
-    	try
-    	{
-    		var list = {},rc = hasteObj.req.headers.cookie;
-
-		    rc && rc.split(';').forEach(function( cookie )
-		    {
-		        var parts = cookie.split('=');
-		        
-		        list[parts.shift().trim()] = decodeURI(parts.join('='));
-		    });
-
-		    resolve(list);
-    	}
-    	catch(e)
-    	{
-    		reject(e);
-    	}
-    });
-}
-
-// setting cookies
-
-
-
-async function setCookies(cookies)
-{
-    return new Promise((resolve,reject)=>{
-    	try
-    	{
-    		var list = [ ];
-
-		    for (var key in cookies)
-		    {
-		        list.push(key + '=' + encodeURIComponent(cookies[key]));
-		    }
-
-		    hasteObj.cookieStatus = list.join('; ');
-
-		    resolve({"Set-Cookie":list.join('; ')});
-    	}
-    	catch(e)
-    	{
-    		reject(e);
-    	}
-    });
-}
-
-
-
-// getting userAgents browser details
-
-
-
-async function getUserAgent(req)
-{
-    return new Promise((resolve,reject)=>{
-    	try
-    	{
-    		if(typeof(hasteObj.req.headers['user-agent']) != 'undefined' && hasteObj.req.headers['user-agent'] != '')
-	        {
-	            resolve(hasteObj.req.headers['user-agent']);
-	        }
-	        else
-	        {
-	            reject(null);
-	        }
-    	}
-    	catch(e)
-    	{
-    		reject(e);
-    	}
-    });
-}
-
-
-// send response for 401 authorization
-
-
-async function sendAuthorization(msg)
-{
-    return new Promise(async ()=>{
-    	try
-    	{
-    		if(!hasteObj.res.headersSent)
-	        {
-	          hasteObj.res.writeHead(401,{
-	            'Keep-Alive':' timeout=5, max=500',
-	            'Server': 'Node Server',
-	            'Developed-By':'Pounze It-Solution Pvt Limited',
-	            'Content-Type':'text/html',
-	            'WWW-Authenticate':'Basic realm="'+msg+'"'
-	          });
-	        }
-	        
-	        var readerStream = await readFiles('./error_files/'+config.errorPages.NotAuthorized);
-
-	        readerStream.on('error', function(error)
-		    {
-	            hasteObj.res.writeHead(404, 'Not Found');
-	        	hasteObj.res.end();
-	        });
-
-	        readerStream.pipe(hasteObj.res);
-
-	        hasteObj.res.on("end",function()
-	        {
-	          readerStream.destroy();
-	        });
-    	}
-    	catch(e)
-    	{
-    		reject(e);
-    	}
-    });
-}
-
-
-
-// checking for 401 authorization username and password
-
-
-
-function checkAuth(req)
-{
-    try
-    {
-    	if(typeof(hasteObj.req.headers['authorization']) == 'undefined')
-	    {
-	        return false;
-	    }
-	    else
-	    {
-	        return true;
-	    }
-    }
-    catch(e)
-    {
-    	return false;
-    	console.error(e);
-    }
-}
-
-async function renderPage(Render,page,code = null,headers = null,compression = null)
-{
-	// zip compression
-
-	if(compression != null)
-	{
-	    hasteObj.res.setHeader('content-encoding','gzip');
-	}
-
-	/*
-
-   		It checks for array if find and replace is array or not
-
-  	*/
-
-  	if(typeof(Render) == 'object' && !Array.isArray(Render))
-  	{
-  		try
-    	{
-    		/*
-		        Checks for file existence using synchronous file reader
-
-		    */
-
-	      	var stat = await fileStat('./views/'+page+'.html');
-
-	      	var data = [];
-
-	      	var regexData;
-
-	      	/*
-		        verifies if its file or directory
-		    */
-
-		    if(stat.isFile())
-		    {
-		    	var modifiedDate = new Date(stat.mtimeMs).getTime();
-
-		        /*
-
-		          If it is file then readstream
-
-		        */
-
-		        var readerStream = fs.createReadStream('./views/'+page+'.html');
-
-				var data = [];
-
-				readerStream.on('error', function(error)
-			    {
-		            hasteObj.res.writeHead(404, 'Not Found');
-		          	hasteObj.res.end();
-		        });
-
-		        readerStream.on('data',function(chunk)
-		        {
-		          data.push(chunk);
-		          // activating zip compression for html pages, javascript, images, and css   
-		        });
-
-			    readerStream.on('end',function()
-			    {
-			    	data = Buffer.concat(data).toString();
-	    	
-			        for(var key in Render)
-			        { 
-			            regexData = new RegExp(key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'),"g");
-			            data = data.replace(regexData, Render[key]);
-			        }
-
-			    	if(headers == null)
-		          	{
-
-			            if(!hasteObj.res.headersSent)
-			            {
-			              hasteObj.res.setHeader("Keep-Alive","timeout=5, max=500");
-			              hasteObj.res.setHeader("Server","Node Server");
-			              hasteObj.res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
-			              hasteObj.res.setHeader('Cache-Control','public,max-age=31536000');
-			              hasteObj.res.setHeader('Pragma','public,max-age=315360008');
-			              hasteObj.res.setHeader('Content-Type','text/html');
-			              hasteObj.res.setHeader('Expires',new Date());
-			              hasteObj.res.setHeader('ETag',modifiedDate);
-			            }
-
-			            if(hasteObj.cookieStatus)
-			            {
-			              hasteObj.res.setHeader("Set-Cookie",hasteObj.cookieStatus);
-			            }
-
-			            if(hasteObj.maintainanceStat != config.server.maintainance)
-			            {
-			              hasteObj.maintainanceStat = config.server.maintainance;
-			              hasteObj.res.statusCode = 200;
-			            }
-			            else
-			            {
-			              if(typeof(hasteObj.req.headers['if-none-match']) == 'undefined')
-			              {
-			                hasteObj.res.statusCode = 200;
-			              }
-			              else
-			              {
-			                if(hasteObj.req.headers['if-none-match'] != modifiedDate)
-			                {
-			                  hasteObj.res.statusCode = 200;
-			                }
-			                else
-			                {
-			                  hasteObj.res.statusCode = 304;
-			                }
-			              }
-			            }
-			        }
-			        else
-			        {
-			          hasteObj.res.writeHead(code,headers);
-			        }
-
-			        hasteObj.res.end(data);
-			    });
-
-			    hasteObj.res.on("end",function()
-			    {
-			      readerStream.destroy();
-			    });
-		    }
-		    else
-			{
-			    console.error('View template page name must be a javascript file');
-			}
-    	}
-    	catch(e)
-    	{
-    		if(!hasteObj.res.headersSent)
-	        {
-	          hasteObj.res.writeHead(500,hasteObj.header500);
-	        }
-	       
-	        var readerStream = await readFiles('./error_files/'+config.errorPages.InternalServerError);
-
-	        readerStream.pipe(hasteObj.res);
-
-	        hasteObj.res.on("end",function()
-	        {
-	          readerStream.destroy();
-	        });
-
-	        console.error(e);
-    	}
-  	}
-  	else
-  	{
-  		console.error('Render variable must be an object');
-  	} 
-}
-
-// method to copy file from temp folder use for file uploading
-
-async function fileCopy(path,pathDir)
-{
-    return new Promise((reject,resolve)=>{
-
-    	fs.readFile(path,function(error, data)
-	    {
-	    	if(error)
-	    	{
-	    		reject(false);
-	    		return;
-	    	}
-
-		    fs.writeFile(pathDir,data,function(error)
-		    {
-		        if(error)
-		        {
-		          reject(false);
-		          return;
-		        }
-
-		        resolve(true);
-
-		    });
-
-	    });
-
-    });
-}
-
-
-
-// filereader to read  files in buffers
-
-
-
-async function fileReader(path)
-{
-    return new Promise((resolve,reject)=>{
-
-    	var data = '';
-
-	    readerStream = fs.createReadStream(path);
-
-	    readerStream.on('data',function(chunk)
-	    {
-	      data += chunk;
-	    });
-
-	    readerStream.on('end',function()
-	    {
-	    	resolve(data);
-	      	readerStream.destroy();
-	    });
-
-	    readerStream.on('error',function(error)
-	    {
-	    	reject(error);
-	      	readerStream.destroy();
-	    });
-    });
-}
-
-
-
-// formatting dates
-
-
-
-function formatDate(date)
-{
-
-    try
-    {
-    	month = '' + (date.getMonth() + 1),
-
-	    day = '' + date.getDate(),
-
-	    year = date.getFullYear(),
-
-	    hour = date.getHours(),
-
-	    min = date.getMinutes(),
-
-	    sec = date.getSeconds();
-
-
-	    if (month.length < 2) month = '0' + month;
-
-	    if (day.length < 2) day = '0' + day;
-
-	    if (hour.length < 2) hour = '0' + hour;
-
-	    if (min.length < 2) min = '0' + min;
-
-	    if (sec.length < 2) sec = '0' + sec;
-
-
-
-	    return [year, month, day].join('-')+' '+hour+':'+min+':'+sec;
-    }
-    catch(e)
-    {
-    	console.error(e);
-    }
-}
-
-
-
-// hash method to encypt data
-
-
-
-function Hash(method,string,encoding)
-{
-    try
-    {
-    	var crypto = require('crypto');
-
-	    var hash = '';
-
-	    if(method == 'sha256')
-	    {
-	      if(encoding == 'hex')
-	      {
-	        hash = crypto.createHash('sha256').update(string).digest('hex');
-	      }
-	      else if(encoding == 'base64')
-	      {
-	        hash = crypto.createHash('sha256').update(string).digest('base64');
-	      }
-	    }
-	    else if(method == 'sha512')
-	    {
-	      const key = 'IgN!TiOn11!1234567890!@#$%^&*()';
-	      
-	      if(encoding == 'hex')
-	      {
-	        hash = crypto.createHmac('sha512', key).update(string).digest('hex');
-	      }
-	      else if(encoding == 'base64')
-	      {
-	        hash = crypto.createHmac('sha512', key).update(string).digest('base64');
-	      }
-	    }
-	    else if(method == 'sha1')
-	    {
-	      if(encoding == 'hex')
-	      {
-	        hash = crypto.createHash('sha1').update(string).digest('hex');
-	      }
-	      else if(encoding == 'base64')
-	      {
-	        hash = crypto.createHash('sha1').update(string).digest('base64');
-	      }
-	    }
-	    else if(method == 'md5')
-	    {
-	      if(encoding == 'hex')
-	      {
-	        hash = crypto.createHash('md5').update(string).digest('hex');
-	      }
-	      else if(encoding == 'base64')
-	      {
-	        hash = crypto.createHash('md5').update(string).digest('base64');
-	      }
-	    }
-	    else
-	    {
-	      hash = 'Please select a valid hashing method';
-	    } 
-
-	    return hash;
-    }
-    catch(e)
-    {
-    	console.error(e);
-    }
-}
-
-
-
-// method to make http client request to other server
-
-
-
-function RemoteRequest(params,callback)
-{
-	return new Promise((resolve,reject)=>{
-
-		var postData = '';
-
-	    var data = '';
-
-	    if(params.protocol == 'http')
-	    {
-
-	      if(typeof(params.message) != 'undefined')
-	      {
-	        postData = params.message;
-	      }
-
-	      var req = http.request(params.options,function(res)
-	      {
-
-	        // on data event is fired call back is append into data variable
-
-	        res.on('data', function(chunk)
-	        {
-	           data += chunk;
-
-	        });
-
-	        // after ending the request
-
-	        res.on('end',function()
-	        {
-	          resolve(data);
-
-	           // console.error('No more data in response.');
-	        });
-
-	      });
-
-	      req.on('error',function(e)
-	      {
-	        reject(`problem with request: ${e.message}`);
-	      });
-
-	      // write data to request body
-
-	      req.write(JSON.stringify(postData));
-
-	      req.end();
-
-	    }
-
-	    if(params.protocol == 'https')
-	    {
-
-	      if(typeof(params.message) != 'undefined')
-	      {
-	        postData = params.message;
-	      }
-
-	      var req = https.request(params.options,function(res)
-	      {
-	        // on data event is fired call back is append into data variable
-
-	        res.on('data', function(chunk)
-	        {
-	           data += chunk;
-	        });
-
-	        // after ending the request
-	        res.on('end',function()
-	        {
-	          resolve(data);
-	           // console.error('No more data in response.');
-	        });
-
-	      });
-
-	      req.on('error',function(e)
-	      {
-	        reject(`problem with request: ${e.message}`);
-	      });
-
-	      // write data to request body
-
-	      req.write(JSON.stringify(postData));
-
-	      req.end();
-
-	    }
-	});	
-}
-
-/*
-  create unique session id
-*/
-function makeid()
-{
-  var text = "";
-  var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"+(new Date).getTime();
-
-  for (var i = 0; i < 30; i++)
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
-
-  return text;
-}
-
-/*
-  session object, this session object sets value in memory not in file so reseting server will delete all sessions
-*/
-
-
-
-/*
-  compression library
-*/
-
-var compress = {
-  gzip:function(data)
-  {
-    var zlib = require('zlib');
-    hasteObj.res.setHeader('content-encoding','gzip');
-
-    zlib.gzip(data, function (_, result)
-    { 
-      hasteObj.res.end(result);              
-    });
-  },
-  deflate:function(data)
-  {
-    var zlib = require('zlib');
-    hasteObj.res.setHeader('content-encoding','deflate');
-    zlib.deflate(data, function (_, result)
-    { 
-      hasteObj.res.end(result);                 
-    });
-  },
-  DeflateRaw:function(data)
-  {
-    var zlib = require('zlib');
-    hasteObj.res.setHeader('content-encoding','deflate');
-    zlib.deflateRaw(data, function (_, result)
-    { 
-      hasteObj.res.end(result);                 
-    });
-  }
-}; 
-
 session.clearSession();
 
 process.on('uncaughtException', error => {
@@ -2700,34 +1949,6 @@ process.on('exit', code => {
 
 exports.init = haste;
 
-exports.defaultHeaders = defaultHeaders;
-
 exports.renderPage = renderPage;
 
-exports.fileCopy = fileCopy;
-
-exports.fileReader = fileReader;
-
-exports.formatDate = formatDate;
-
-exports.Hash = Hash;
-
-exports.RemoteRequest = RemoteRequest;
-
-exports.writeLogs = writeLogs;
-
-exports.Authorization = Authorization;
-
-exports.checkAuth = checkAuth;
-
-exports.sendAuthorization = sendAuthorization;
-
-exports.getCookies = getCookies;
-
-exports.setCookies = setCookies;
-
-exports.getUserAgent = getUserAgent;
-
-exports.session = session;
-
-exports.compress = compress;
+exports.executeModules = executeModules;
