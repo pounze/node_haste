@@ -1,4 +1,36 @@
 # node_haste
+
+Route:
+
+app.get("/test",function(req,res)
+{	
+	res.end("ok");
+});
+
+# Express
+
+* Results per URL for complete test *
+
+URL#1 (): Average Click Time 3,030 ms, 7,786 Clicks, 0 Errors 
+
+Total Number of Clicks: 7,786 (0 Errors)
+Average Click Time of all URLs: 3,030 ms 
+
+###########################################################################
+
+# Haste
+
+* Results per URL for complete test *
+
+URL#1 (): Average Click Time 2,437 ms, 9,675 Clicks, 0 Errors 
+
+Total Number of Clicks: 9,675 (0 Errors)
+Average Click Time of all URLs: 2,437 ms 
+
+##########################################################################
+
+Note***: 
+
 Node Framework to allow developers to write less codes
 Its a testing version 1.0 that has routing, middlewares, Authorization, RemoteRequest, socket support, mysql wrapper class, hashing etc.
 Next version will be a major change that will increase the performance of the framework as it will have c++ thread modules as nodeAddons support
