@@ -10,7 +10,7 @@
 
   Join us to make this framework the best among all other frameworks
 
-  current version: 1.2
+  current version: 1.8
 
   next version will be in c++ Thread module will be implemented as node Addons library for concurrency
 
@@ -51,6 +51,8 @@ const sessionObj = require(__dirname+'/session.js');
 const mimeList = require('./MimeList.js');
 
 const CachedFiles = require('./CachedFiles.js');
+
+var zlib = require('zlib');
 
 
 /*
@@ -249,6 +251,8 @@ haste.fn = Library.prototype =
         {
           callback(hasteObj.server);
         }
+
+        return hasteObj.server;
       }
     }
     catch(e)
@@ -333,6 +337,8 @@ haste.fn = Library.prototype =
         {
           callback(hasteObj.server);
         }
+
+        return hasteObj.server;
       }
     }
     catch(e)
@@ -848,7 +854,20 @@ function serveStaticFiles(req,res,requestUri,ext)
 
         CachedFiles.staticFiles[fileName].data = data;
 
-        res.end(data);
+        if(config.compression.gzip)
+        {
+          res.setHeader("Content-Encoding","gzip");
+
+          zlib.gzip(data, function (_, result)
+          { 
+            res.write(result);
+            res.end();                          
+          });
+        }
+        else
+        {
+          res.end(data);     
+        }
       });
 
     });
@@ -1002,7 +1021,20 @@ function handleRequest(req,res)
                 }
               }
 
-              res.end(CachedFiles.staticFiles[fileName].data);
+              if(config.compression.gzip)
+              {
+                res.setHeader("Content-Encoding","gzip");
+
+                zlib.gzip(CachedFiles.staticFiles[fileName].data, function (_, result)
+                { 
+                  res.write(result);
+                  res.end();                          
+                });
+              }
+              else
+              {
+                res.end(CachedFiles.staticFiles[fileName].data);     
+              }
             }
           } 
           else
@@ -1360,13 +1392,13 @@ function renderPage(req,res,Render,page,code = null,headers = null,compression =
 
       if(config.cache.Document)
       {
-        if(CachedFiles.staticFiles[page] == undefined)
+        if(CachedFiles.documentFiles[page] == undefined)
         {
           serveDocumentFile(req,res,Render,page,code,headers,compression);
         }
         else
         {
-          var modifiedDate = new Date(CachedFiles.staticFiles[page].stat.mtimeMs).getTime();
+          var modifiedDate = new Date(CachedFiles.documentFiles[page].stat.mtimeMs).getTime();
 
           if(headers == null)
           {
@@ -1399,7 +1431,18 @@ function renderPage(req,res,Render,page,code = null,headers = null,compression =
             }
           }
 
-          res.end(CachedFiles.staticFiles[page].data);
+          if(compression != null)
+          {
+            zlib.gzip(CachedFiles.documentFiles[page].data, function (_, result)
+            { 
+              res.write(result);
+              res.end();                          
+            });
+          }
+          else
+          {
+            res.end(CachedFiles.documentFiles[page].data);     
+          }
         }
       }
       else
@@ -1432,7 +1475,7 @@ function serveDocumentFile(req,res,Render,page,code,headers,compression)
 
     var modifiedDate = new Date(stat.mtimeMs).getTime();
 
-    CachedFiles.staticFiles[page] = {
+    CachedFiles.documentFiles[page] = {
       stat:stat
     };
 
@@ -1452,7 +1495,7 @@ function serveDocumentFile(req,res,Render,page,code,headers,compression)
 
     readerStream.on('end',function()
     {
-      CachedFiles.staticFiles[page].data = data;
+      CachedFiles.documentFiles[page].data = data;
 
       readerStream.destroy();
 
@@ -1501,7 +1544,18 @@ function serveDocumentFile(req,res,Render,page,code,headers,compression)
         res.writeHead(code,headers);
       }
 
-      res.end(data);
+      if(compression != null)
+      {
+        zlib.gzip(data, function (_, result)
+        { 
+          res.write(result);
+          res.end();                          
+        });
+      }
+      else
+      {
+        res.end(data);     
+      }
     });
 
     readerStream.on('error',function()
