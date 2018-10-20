@@ -44,7 +44,7 @@ const stream = require('stream');
 
 const config = require(__dirname+'/config.js');
 
-var viewsObj = require('../common_templates/common_templates.js');
+const viewsObj = require('../common_templates/common_templates.js');
 
 const sessionObj = require(__dirname+'/session.js');
 
