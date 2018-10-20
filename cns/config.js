@@ -23,9 +23,14 @@ module.exports = {
 		setTimeout:12000,
 		showHeapUsuage:false,
 		maxListeners:0,
-		socketTimeout:0,
-		cpuCores:4,
+		socketTimeout:120000,
+		keepAliveTimeout:5000,
+		cpuCores:'',
 		sessionTimeout:5
+	},
+	cache:{
+		staticFiles:true,
+		Document:true
 	},
 	log:{
 		path:'',
@@ -38,6 +43,6 @@ module.exports = {
 		MaintainancePage:"maintainance.html"
 	},
 	compression:{
-		gzip:true
+		gzip:false
 	}	
 };
