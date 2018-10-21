@@ -54,7 +54,6 @@ const CachedFiles = require('./CachedFiles.js');
 
 const zlib = require('zlib');
 
-
 /*
 
   haste method is declared where Library constructor is called
@@ -93,6 +92,11 @@ var haste = function(params)
       CachedFiles.staticFiles.File500 = {
         fileStat:fs.statSync(__rootdir+"/error_files/500.html"),
         data:fs.readFileSync(__rootdir+"/error_files/500.html")
+      };
+
+      CachedFiles.staticFiles.File503 = {
+        fileStat:fs.statSync(__rootdir+"/error_files/maintainance.html"),
+        data:fs.readFileSync(__rootdir+"/error_files/maintainance.html")
       };
     }
     catch(e)
@@ -167,6 +171,15 @@ var Library = function(params)
     'Expires':date
   };
 
+  this.header503 = {
+    'Server': 'Node Server',
+    'Developed-By':'Pounze It-Solution Pvt Limited',
+    'Content-Type':'text/html',
+    'Cache-Control':'public, max-age=350000',
+    'Pragma':'public, max-age=350000',
+    'Expires':date
+  };
+
   return this;
 
 };
@@ -181,6 +194,89 @@ var hasteObj = haste();
 
 haste.fn = Library.prototype = 
 {
+  Http2Server:function(ip,port,options,callback = null)
+  {
+    var version = process.version.replace("v","");
+
+    version = version.split(".");
+
+    if(version[0] < 10)
+    {
+      console.error('Http/2 not support by this nodeJS, kindly update to latest http2 support nodejs');
+      process.exit(1);
+      return;
+    }
+
+    const http2 = require('http2');
+
+    try
+    {
+      if(typeof(ip) != 'string' || typeof(port) != 'number')
+      {
+        console.error("IP and PORT cannot be empty",null);
+        return;
+      }
+
+      var cpuCount = null;
+
+      if(cluster.isMaster)
+      {
+        if(typeof(config.server.cpuCores) != 'undefined' && typeof(config.server.cpuCores) == 'number')
+        {
+          cpuCount = config.server.cpuCores;
+        }
+        else
+        {
+          cpuCount = require('os').cpus().length;
+        }
+
+        for(var i=0;i<cpuCount;i++)
+        {
+          cluster.fork();
+        }
+
+        cluster.on('exit',()=>{
+          cluster.fork();
+        });
+      }
+      else
+      {
+        hasteObj.server = http2.createSecureServer(options);
+
+        hasteObj.server.on('error', (err) => console.error(err));
+
+        hasteObj.server.on('stream',function(stream, headers,flags)
+        {
+          var data = [];
+
+          stream.on('data',function(chunk)
+          {
+            data.push(chunk);
+          });
+
+          stream.on('end',function()
+          {
+            var body = Buffer.concat(data);
+            
+            handleHttp2Request(stream,headers,body);
+          });
+        });
+
+        hasteObj.server.listen(port,ip);
+
+        callback(hasteObj.server);
+      }
+
+      return hasteObj.server;
+    }
+    catch(e)
+    {
+      if(callback != null)
+      {
+        callback(e);
+      }
+    }
+  },
   HttpsServer:function(ip,port,options,callback = null)
   {
     try
@@ -188,6 +284,7 @@ haste.fn = Library.prototype =
       if(typeof(ip) != 'string' || typeof(port) != 'number')
       {
         console.error("IP and PORT cannot be empty",null);
+        return;
       }
 
       var cpuCount = null;
@@ -270,6 +367,7 @@ haste.fn = Library.prototype =
       if(typeof(ip) != 'string' || typeof(port) != 'number')
       {
         console.error("IP and PORT cannot be empty",null);
+        return;
       }
 
       var cpuCount = null;
@@ -875,6 +973,61 @@ function serveStaticFiles(req,res,requestUri,ext)
   });
 }
 
+function handleHttp2Request(stream,headers,body)
+{
+  try
+  {
+    if(typeof(defaultMethod) != 'undefined')
+    {
+      defaultMethod(req,res);
+    }
+
+    session.currentSession = '';
+
+    var heapUsuage = data = null;
+
+    heapUsuage = process.memoryUsage();
+
+    if(config.server.showHeapUsuage)
+    {
+      console.error('Heap used '+heapUsuage['heapUsed'] +' | Heap total size: '+heapUsuage['heapTotal']);
+    }
+
+    if(heapUsuage['heapUsed'] > heapUsuage['heapTotal'])
+    {
+      data = {
+        status:false,
+        msg:'Server is to busy'
+      };
+
+      stream.end(JSON.stringify(data));
+
+      return;
+    }
+
+    if(config.server.maintainance)
+    {
+      stream.respond({
+        'Server:"Node':'Server',
+        'content-type':'text/html',
+        'Developed-By':'Pounze It-Solution Pvt Limited'
+      });
+      
+      renderErrorFiles(req,res,503);
+      
+      return false;
+    }
+
+    console.log(headers);
+
+    stream.end("working");
+  }
+  catch(e)
+  {
+    console.error(e);
+  }
+}
+
 function handleRequest(req,res)
 {
 	try
@@ -905,6 +1058,8 @@ function handleRequest(req,res)
       };
 
       res.end(JSON.stringify(data));
+
+      return;
     }
 
     req.on('error',function()
@@ -926,25 +1081,9 @@ function handleRequest(req,res)
         res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
         res.setHeader("Content-Type","text/html");
       }
+
+      renderErrorFiles(req,res,503);
       
-      var readerStream = fs.createReadStream(__rootdir+'/error_files/'+config.errorPages.MaintainancePage);
-
-      readerStream.on('error', function(error)
-      {
-        res.writeHead(404, 'Not Found');
-      	res.end();
-      });
-
-      readerStream.on('open', function()
-      {
-        readerStream.pipe(res);
-      });
-
-      readerStream.on('end',function()
-      {
-        readerStream.destroy();
-      });
-
       return false;
     }
 
@@ -1634,6 +1773,32 @@ function renderErrorFiles(req,res,statusCode)
     else
     {
       fs.readFile(__rootdir+'/error_files/'+config.errorPages.DirectoryAccess, function(err, data)
+      {
+        if(err)
+        {
+          console.error(err);
+        }
+        else
+        {
+          res.end(data);
+        }
+      });
+    }
+  }
+  else if(statusCode === 503)
+  {
+    if(!res.headersSent)
+    {
+      res.writeHead(statusCode,hasteObj.header503);
+    }
+
+    if(config.cache.staticFiles)
+    {
+      res.end(CachedFiles.staticFiles.File503.data);
+    } 
+    else
+    {
+      fs.readFile(__rootdir+'/error_files/'+config.errorPages.MaintainancePage, function(err, data)
       {
         if(err)
         {
