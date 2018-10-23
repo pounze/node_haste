@@ -124,6 +124,10 @@ var Library = function(params)
 
   this.cacheDocFile = {};
 
+  this.http2 = {};
+
+  this.http2.constants = {};
+
   this.req = {};
 
   this.res = {};
@@ -207,7 +211,14 @@ haste.fn = Library.prototype =
       return;
     }
 
-    const http2 = require('http2');
+    hasteObj.http2 = require('http2');
+
+    hasteObj.http2.constants = {
+      HTTP2_HEADER_METHOD,
+      HTTP2_HEADER_PATH,
+      HTTP2_HEADER_STATUS,
+      HTTP2_HEADER_CONTENT_TYPE
+    } = http2.constants;
 
     try
     {
@@ -241,26 +252,39 @@ haste.fn = Library.prototype =
       }
       else
       {
-        hasteObj.server = http2.createSecureServer(options);
-
-        hasteObj.server.on('error', (err) => console.error(err));
-
-        hasteObj.server.on('stream',function(stream, headers,flags)
+        if(typeof(options) != 'object')
         {
-          var data = [];
+          console.error("Options must be valid object with certificates");
+          return;
+        }
 
-          stream.on('data',function(chunk)
-          {
-            data.push(chunk);
-          });
+        hasteObj.server = http2.createSecureServer(options,handleRequest);
 
-          stream.on('end',function()
-          {
-            var body = Buffer.concat(data);
+        // hasteObj.server.on('error', (err) => console.error(err));
+
+        // hasteObj.server.on('stream',function(stream, headers,flags)
+        // {
+        //   var data = [];
+
+        //   stream.on('data',function(chunk)
+        //   {
+        //     data.push(chunk);
+        //   });
+
+        //   stream.on('end',function()
+        //   {
+        //     var body = Buffer.concat(data);
             
-            handleHttp2Request(stream,headers,body);
-          });
-        });
+        //     handleHttp2Request(stream,headers,body);
+
+        //   });
+
+        //   stream.on('close',function()
+        //   {
+        //     stream.close();
+        //   });
+
+        // });
 
         hasteObj.server.listen(port,ip);
 
@@ -311,6 +335,12 @@ haste.fn = Library.prototype =
       }
       else
       {
+        if(typeof(options) != 'object')
+        {
+          console.error("Options must be valid object with certificates");
+          return;
+        }
+
         hasteObj.server = https.createServer(options);
 
         hasteObj.server.on('request', function(req, res)
@@ -566,7 +596,7 @@ haste.fn = Library.prototype =
       {
         if(err)
         {
-          renderErrorFiles(404);
+          renderErrorFiles(req,res,404,null,null);
           return;
         }
 
@@ -610,7 +640,7 @@ haste.fn = Library.prototype =
     {
       console.error(e);
 
-      renderErrorFiles(500);
+      renderErrorFiles(req,res,500,null,null);
     }
 
   },
@@ -654,6 +684,16 @@ haste.fn = Library.prototype =
   }
 };
 
+function cloneObject(obj)
+{
+  if (null == obj || "object" != typeof obj) return obj;
+  var copy = obj.constructor();
+  for (var attr in obj) {
+      if (obj.hasOwnProperty(attr)) copy[attr] = obj[attr];
+  }
+  return copy;
+}
+
 function modules(req,res,obj)
 {
 
@@ -684,7 +724,7 @@ function modules(req,res,obj)
       {
         fs.stat(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js',function(err,middlewarestat)
         {
-          if(stat)
+          if(err)
           {
             renderErrorFiles(req,res,404);
             return;
@@ -905,7 +945,6 @@ function serveStaticFiles(req,res,requestUri,ext)
   {
     if(!exist)
     {
-      // if the file is not found, return 404
       res.statusCode = 404;
       res.end(`File ${requestUri} not found!`);
       return;
@@ -915,7 +954,8 @@ function serveStaticFiles(req,res,requestUri,ext)
     {
       if(err)
       {
-        renderErrorFiles(req,res,404);
+        res.statusCode = 404;
+        res.end(`File ${requestUri} not found!`);
         return;
       }
 
@@ -946,7 +986,8 @@ function serveStaticFiles(req,res,requestUri,ext)
       {
         if(err)
         {
-          renderErrorFiles(req,res,500);
+          res.statusCode = 500;
+          res.end("Internal Server Error");
           return;
         }
 
@@ -971,61 +1012,7 @@ function serveStaticFiles(req,res,requestUri,ext)
     });
 
   });
-}
-
-function handleHttp2Request(stream,headers,body)
-{
-  try
-  {
-    if(typeof(defaultMethod) != 'undefined')
-    {
-      defaultMethod(req,res);
-    }
-
-    session.currentSession = '';
-
-    var heapUsuage = data = null;
-
-    heapUsuage = process.memoryUsage();
-
-    if(config.server.showHeapUsuage)
-    {
-      console.error('Heap used '+heapUsuage['heapUsed'] +' | Heap total size: '+heapUsuage['heapTotal']);
-    }
-
-    if(heapUsuage['heapUsed'] > heapUsuage['heapTotal'])
-    {
-      data = {
-        status:false,
-        msg:'Server is to busy'
-      };
-
-      stream.end(JSON.stringify(data));
-
-      return;
-    }
-
-    if(config.server.maintainance)
-    {
-      stream.respond({
-        'Server:"Node':'Server',
-        'content-type':'text/html',
-        'Developed-By':'Pounze It-Solution Pvt Limited'
-      });
-      
-      renderErrorFiles(req,res,503);
-      
-      return false;
-    }
-
-    console.log(headers);
-
-    stream.end("working");
-  }
-  catch(e)
-  {
-    console.error(e);
-  }
+  
 }
 
 function handleRequest(req,res)
@@ -1072,20 +1059,6 @@ function handleRequest(req,res)
     {
       // request ended normally
     });
-
-    if(config.server.maintainance)
-    {
-      if(!res.headersSent)
-      {
-        res.setHeader("Server","Node Server");
-        res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
-        res.setHeader("Content-Type","text/html");
-      }
-
-      renderErrorFiles(req,res,503);
-      
-      return false;
-    }
 
     let requestMethod = req.method;
 
@@ -1139,7 +1112,7 @@ function handleRequest(req,res)
           {
             if(CachedFiles.staticFiles[fileName] == undefined)
             {
-              serveStaticFiles(req,res,__rootdir+requestUri,ext);
+              serveStaticFiles(req,res,__rootdir+requestUri,ext,null,null);
             }
             else
             {
@@ -1178,7 +1151,7 @@ function handleRequest(req,res)
           } 
           else
           {
-            serveStaticFiles(req,res,__rootdir+requestUri,ext);
+            serveStaticFiles(req,res,__rootdir+requestUri,ext,null,null);
           }
         }
       }
@@ -1190,6 +1163,13 @@ function handleRequest(req,res)
       }
 
       return;
+    }
+
+    if(config.server.maintainance)
+    {
+      renderErrorFiles(req,res,503);
+      
+      return false;
     }
 
     /*
@@ -1407,7 +1387,7 @@ function parsePOST(req,res,obj)
 
             if(obj == undefined)
             {
-              processRequest(req,res,);
+              processRequest(req,res);
             }
             else
             {
@@ -1417,9 +1397,10 @@ function parsePOST(req,res,obj)
           catch(e)
           {
             console.error(e);
+            req.end(req.headers['content-type'] + " currently not supported");
           }
         }
-        else
+        else if(req.headers['content-type'] == "application/x-www-form-urlencoded")
         {
           hasteObj.input['requestData'] = qs.parse(body);
 
@@ -1432,27 +1413,24 @@ function parsePOST(req,res,obj)
             modules(req,res,obj);
           }
         }
+        else
+        {
+          req.end(req.headers['content-type'] + " currently not supported");
+        }
       });
     }
   }
   else
   {
+    res.end('No content-type header is present in the request');
     console.error('No content-type header is present in the request');
   }
 }
 
 function processRequest(req,res)
 {
-  if(req.method == 'POST')
-  {
-    var mapping = hasteObj.input['requestData']['mapping'];
-    var cortex = hasteObj.input['requestData']['cortex'];
-  }
-  else
-  {
-    var mapping = hasteObj.input['query']['mapping'];
-    var cortex = hasteObj.input['query']['cortex'];
-  }
+  var mapping = hasteObj.input['requestData']['mapping'];
+  var cortex = hasteObj.input['requestData']['cortex'];
 
   var tempMapping = '';
 
@@ -1600,6 +1578,7 @@ function renderPage(req,res,Render,page,code = null,headers = null,compression =
   }
 }
 
+
 function serveDocumentFile(req,res,Render,page,code,headers,compression)
 {
   let pathname = PATHNAME.join(__rootdir, "/views/"+page+'.html');
@@ -1617,11 +1596,6 @@ function serveDocumentFile(req,res,Render,page,code,headers,compression)
     CachedFiles.documentFiles[page] = {
       stat:stat
     };
-
-    if(stat.isDirectory())
-    {
-      pathname += '/index.html';
-    }
 
     var data = '';
 
@@ -1705,18 +1679,33 @@ function serveDocumentFile(req,res,Render,page,code,headers,compression)
   });
 }
 
-function renderErrorFiles(req,res,statusCode)
+function renderErrorFiles(req,res,statusCode,stream = null,headers = null,pathname = null)
 {
   if(statusCode === 404)
   {
-    if(!res.headersSent)
+    if(stream == null)
     {
-      res.writeHead(statusCode,hasteObj.header404);
+      if(!res.headersSent)
+      {
+        res.writeHead(statusCode,hasteObj.header404);
+      }
+    }
+    else
+    {
+      hasteObj.header404[[hasteObj.http2.constants.HTTP2_HEADER_STATUS]] = 200;
+      stream.respond(hasteObj.header404);
     }
 
     if(config.cache.staticFiles)
     {
-      res.end(CachedFiles.staticFiles.File404.data);
+      if(stream == null)
+      {
+        res.end(CachedFiles.staticFiles.File404.data);
+      }
+      else
+      {
+        stream.end(CachedFiles.staticFiles.File404.data);
+      }
     } 
     else
     {
@@ -1728,21 +1717,43 @@ function renderErrorFiles(req,res,statusCode)
         }
         else
         {
-          res.end(data);
+          if(stream == null)
+          {
+            res.end(data);
+          }
+          else
+          {
+            stream.end(data);
+          }
         }
       });
     }
   }
   else if(statusCode === 500)
   {
-    if(!res.headersSent)
+    if(stream == null)
     {
-      res.writeHead(statusCode,hasteObj.header500);
+      if(!res.headersSent)
+      {
+        res.writeHead(statusCode,hasteObj.header500);
+      }
+    }
+    else
+    {
+      hasteObj.header500[[hasteObj.http2.constants.HTTP2_HEADER_STATUS]] = 200;
+      stream.respond(hasteObj.header500);
     }
 
     if(config.cache.staticFiles)
     {
-      res.end(CachedFiles.staticFiles.File500.data);
+      if(stream == null)
+      {
+        res.end(CachedFiles.staticFiles.File500.data);
+      }
+      else
+      {
+        stream.end(CachedFiles.staticFiles.File500.data);
+      }
     } 
     else
     {
@@ -1754,21 +1765,43 @@ function renderErrorFiles(req,res,statusCode)
         }
         else
         {
-          res.end(data);
+          if(stream == null)
+          {
+            res.end(data);
+          }
+          else
+          {
+            stream.end(data);
+          }
         }
       });
     }
   }
   else if(statusCode === 403)
   {
-    if(!res.headersSent)
+    if(stream == null)
     {
-      res.writeHead(statusCode,hasteObj.header403);
+      if(!res.headersSent)
+      {
+        res.writeHead(statusCode,hasteObj.header403);
+      }
+    }
+    else
+    {
+      hasteObj.header403[[hasteObj.http2.constants.HTTP2_HEADER_STATUS]] = 403;
+      stream.respond(hasteObj.header403);
     }
 
     if(config.cache.staticFiles)
     {
-      res.end(CachedFiles.staticFiles.File403.data);
+      if(stream == null)
+      {
+        res.end(CachedFiles.staticFiles.File403.data);
+      }
+      else
+      {
+        stream.end(CachedFiles.staticFiles.File403.data);
+      }
     } 
     else
     {
@@ -1780,34 +1813,83 @@ function renderErrorFiles(req,res,statusCode)
         }
         else
         {
-          res.end(data);
+          if(stream == null)
+          {
+            res.end(data);
+          }
+          else
+          {
+            stream.end(data);
+          }
         }
       });
     }
   }
   else if(statusCode === 503)
   {
-    if(!res.headersSent)
+    if(stream == null)
     {
-      res.writeHead(statusCode,hasteObj.header503);
+      if(!res.headersSent)
+      {
+        res.writeHead(statusCode,hasteObj.header503);
+      }
     }
 
     if(config.cache.staticFiles)
     {
-      res.end(CachedFiles.staticFiles.File503.data);
+      if(stream == null)
+      {
+        res.end(CachedFiles.staticFiles.File503.data);
+      }
+      else
+      {
+        hasteObj.header503[[hasteObj.http2.constants.HTTP2_HEADER_STATUS]] = 503;
+
+        stream.respond(hasteObj.header503);
+
+        stream.end(CachedFiles.staticFiles.File503.data);
+      }
     } 
     else
     {
-      fs.readFile(__rootdir+'/error_files/'+config.errorPages.MaintainancePage, function(err, data)
+      fs.exists(pathname,function(exists)
       {
-        if(err)
+        if(!exists)
         {
-          console.error(err);
+          hasteObj.header503[[hasteObj.http2.constants.HTTP2_HEADER_STATUS]] = 404;
+          stream.respond(hasteObj.header404);
+          stream.end("File not found");
+          return;
         }
-        else
+
+        if(fs.statSync(pathname).isDirectory())
         {
-          res.end(data);
+          pathname += '/error_files/'+config.errorPages.MaintainancePage;
         }
+
+        fs.readFile(pathname, function(err, data)
+        {
+          if(err)
+          {
+            stream.respond(hasteObj.header500);
+            stream.end(data);
+          }
+          else
+          {
+            if(stream == null)
+            {
+              res.writeHead(statusCode,hasteObj.header503);
+              res.end(data);
+            }
+            else
+            {
+              hasteObj.header503[[hasteObj.http2.constants.HTTP2_HEADER_STATUS]] = 503;
+              stream.respond(hasteObj.header503);
+              stream.end(data);
+            }
+          }
+        });
+
       });
     }
   }
@@ -2151,12 +2233,762 @@ let session = {
   }
 };
 
+async function Authorization(req)
+{
+  return new Promise((resolve,reject)=>{
+    try
+    {
+      let auth = req.headers['authorization'].split(' ')[1];
+
+      let decodedHeader = new Buffer(auth, 'base64').toString();
+
+      decodedHeader = decodedHeader.split(':');
+
+      resolve(decodedHeader);
+    }
+    catch(e)
+    {
+      reject(e);
+    }
+  });
+}
+
+
+
+// getting cookies
+
+async function getCookies(req)
+{
+  return new Promise((resolve,reject)=>{
+    try
+    {
+      var list = {},rc = req.headers.cookie;
+
+      rc && rc.split(';').forEach(function( cookie )
+      {
+        var parts = cookie.split('=');
+        
+        list[parts.shift().trim()] = decodeURI(parts.join('='));
+      });
+
+      resolve(list);
+    }
+    catch(e)
+    {
+      reject(e);
+    }
+  });
+}
+
+// setting cookies
+
+
+
+async function setCookies(cookies)
+{
+  return new Promise((resolve,reject)=>{
+    try
+    {
+      var list = [ ];
+
+      for (var key in cookies)
+      {
+          list.push(key + '=' + encodeURIComponent(cookies[key]));
+      }
+
+      hasteObj.cookieStatus = list.join('; ');
+
+      resolve({"Set-Cookie":list.join('; ')});
+    }
+    catch(e)
+    {
+      reject(e);
+    }
+  });
+}
+
+// getting userAgents browser details
+
+
+
+async function getUserAgent(req,callback)
+{
+  if(callback != undefined && typeof(callback) == "function")
+  { 
+    try
+    {
+      if(typeof(req.headers['user-agent']) != 'undefined' && req.headers['user-agent'] != '')
+      {
+        callback(req.headers['user-agent']);
+      }
+      else
+      {
+        callback(null);
+      }
+    }
+    catch(e)
+    {
+      callback(e);
+    }
+  }
+  else
+  {
+    return new Promise((resolve,reject)=>{
+      try
+      {
+        if(typeof(req.headers['user-agent']) != 'undefined' && req.headers['user-agent'] != '')
+        {
+          resolve(req.headers['user-agent']);
+        }
+        else
+        {
+          reject(null);
+        }
+      }
+      catch(e)
+      {
+        reject(e);
+      }
+    });
+  }
+}
+
+
+// send response for 401 authorization
+
+
+async function sendAuthorization(req,res,msg)
+{
+  try
+  {
+    if(!res.headersSent)
+    {
+      res.writeHead(401,{
+        'Keep-Alive':' timeout=5, max=500',
+        'Server': 'Node Server',
+        'Developed-By':'Pounze It-Solution Pvt Limited',
+        'Content-Type':'text/html',
+        'WWW-Authenticate':'Basic realm="'+msg+'"'
+      });
+    }
+    
+    var readerStream = fs.createReadStream('./error_files/'+config.errorPages.NotAuthorized);
+
+    readerStream.on('error', function(error)
+    {
+      res.writeHead(404, 'Not Found');
+      res.end();
+    });
+
+    readerStream.on('open', function()
+    {
+      readerStream.pipe(res);
+    });
+
+    readerStream.on('end',function()
+    {
+      readerStream.destroy();
+    });
+  }
+  catch(e)
+  {
+    reject(e);
+  }
+}
+
+
+
+// checking for 401 authorization username and password
+
+
+
+function checkAuth(req)
+{
+  try
+  {
+    if(typeof(req.headers['authorization']) == 'undefined')
+    {
+      return false;
+    }
+    else
+    {
+      return true;
+    }
+  }
+  catch(e)
+  {
+    return false;
+    console.error(e);
+  }
+}
+
+async function writeLogs(path,data,callback)
+{
+  if(callback != undefined && typeof(callback) != "function")
+  {
+    fs.open(path, 'w', function(err, fd)
+    {
+      if(err)
+      {
+        callback({err:err,status:false});
+      }
+
+      fs.write(fd, data,function(err)
+      {
+        if(err)
+        {
+          callback({err:err,status:false});
+        }
+        else
+        {
+          fs.close(fd, function()
+          {
+            callback({msg:'Write successfully',status:true});
+          });
+        }
+      });
+    });
+  }
+  else
+  {
+    return new Promise((resolve,reject)=>{
+      fs.open(path, 'w', function(err, fd)
+      {
+        if(err)
+        {
+          reject({err:err,status:false});
+        }
+
+        fs.write(fd, data,function(err)
+        {
+          if(err)
+          {
+            reject({err:err,status:false});
+          }
+          else
+          {
+            fs.close(fd, function()
+            {
+              resolve({msg:'Write successfully',status:true});
+            });
+          }
+        });
+      });
+    });
+  } 
+}
+
+// method to copy file from temp folder use for file uploading
+
+async function fileCopy(path,pathDir,callback)
+{
+  if(callback != undefined && typeof(callback) != "function")
+  {
+    fs.readFile(path,function(error, data)
+    {
+      if(error)
+      {
+        callback(false);
+        return;
+      }
+
+      fs.writeFile(pathDir,data,function(error)
+      {
+        if(error)
+        {
+          callback(false);
+          return;
+        }
+
+        callback(true);
+
+      });
+
+    });
+  }
+  else
+  {
+    return new Promise((reject,resolve)=>{
+
+      fs.readFile(path,function(error, data)
+      {
+        if(error)
+        {
+          reject(false);
+          return;
+        }
+
+        fs.writeFile(pathDir,data,function(error)
+        {
+          if(error)
+          {
+            reject(false);
+            return;
+          }
+
+          resolve(true);
+
+        });
+
+      });
+
+    });
+  }
+}
+
+// default headers method
+
+async function defaultHeaders(res,statuCode,headers)
+{
+  if(!res.headersSent)
+  {
+    res.writeHead(statuCode,headers);
+  }
+}
+
+// filereader to read  files in buffers
+
+
+
+async function fileReader(path,callback)
+{
+  if(callback != undefined && typeof(callback) == "function")
+  {
+    var data = '';
+
+    readerStream = fs.createReadStream(path);
+
+    readerStream.on('data',function(chunk)
+    {
+      data += chunk;
+    });
+
+    readerStream.on('end',function()
+    {
+      callback(data);
+      readerStream.destroy();
+    });
+
+    readerStream.on('error',function(error)
+    {
+      callback(error);
+      readerStream.destroy();
+    });
+  }
+  else
+  {
+    return new Promise((resolve,reject)=>{
+
+      var data = '';
+
+      readerStream = fs.createReadStream(path);
+
+      readerStream.on('data',function(chunk)
+      {
+        data += chunk;
+      });
+
+      readerStream.on('end',function()
+      {
+        resolve(data);
+          readerStream.destroy();
+      });
+
+      readerStream.on('error',function(error)
+      {
+        reject(error);
+        readerStream.destroy();
+      });
+    });
+  }
+}
+
+
+
+// formatting dates
+
+
+
+function formatDate(date)
+{
+
+  try
+  {
+    month = '' + (date.getMonth() + 1),
+
+    day = '' + date.getDate(),
+
+    year = date.getFullYear(),
+
+    hour = date.getHours(),
+
+    min = date.getMinutes(),
+
+    sec = date.getSeconds();
+
+
+    if (month.length < 2) month = '0' + month;
+
+    if (day.length < 2) day = '0' + day;
+
+    if (hour.length < 2) hour = '0' + hour;
+
+    if (min.length < 2) min = '0' + min;
+
+    if (sec.length < 2) sec = '0' + sec;
+
+
+
+    return [year, month, day].join('-')+' '+hour+':'+min+':'+sec;
+  }
+  catch(e)
+  {
+    console.error(e);
+  }
+}
+
+// hash method to encypt data
+
+
+
+function Hash(method,string,encoding)
+{
+  try
+  {
+    var crypto = require('crypto');
+
+    var hash = '';
+
+    if(method == 'sha256')
+    {
+      if(encoding == 'hex')
+      {
+        hash = crypto.createHash('sha256').update(string).digest('hex');
+      }
+      else if(encoding == 'base64')
+      {
+        hash = crypto.createHash('sha256').update(string).digest('base64');
+      }
+    }
+    else if(method == 'sha512')
+    {
+      const key = 'IgN!TiOn11!1234567890!@#$%^&*()';
+      
+      if(encoding == 'hex')
+      {
+        hash = crypto.createHmac('sha512', key).update(string).digest('hex');
+      }
+      else if(encoding == 'base64')
+      {
+        hash = crypto.createHmac('sha512', key).update(string).digest('base64');
+      }
+    }
+    else if(method == 'sha1')
+    {
+      if(encoding == 'hex')
+      {
+        hash = crypto.createHash('sha1').update(string).digest('hex');
+      }
+      else if(encoding == 'base64')
+      {
+        hash = crypto.createHash('sha1').update(string).digest('base64');
+      }
+    }
+    else if(method == 'md5')
+    {
+      if(encoding == 'hex')
+      {
+        hash = crypto.createHash('md5').update(string).digest('hex');
+      }
+      else if(encoding == 'base64')
+      {
+        hash = crypto.createHash('md5').update(string).digest('base64');
+      }
+    }
+    else
+    {
+      hash = 'Please select a valid hashing method';
+    } 
+
+    return hash;
+  }
+  catch(e)
+  {
+    console.error(e);
+  }
+}
+
+
+
+// method to make http client request to other server
+
+
+
+async function RemoteRequest(params,callback)
+{
+  if(callback != undefined && typeof(callback) == "function")
+  {
+
+
+    var postData = '';
+
+    var data = '';
+
+    if(params.protocol == 'http')
+    {
+
+      if(typeof(params.message) != 'undefined')
+      {
+        postData = params.message;
+      }
+
+      var req = http.request(params.options,function(res)
+      {
+
+        // on data event is fired call back is append into data variable
+
+        res.on('data', function(chunk)
+        {
+           data += chunk;
+
+        });
+
+        // after ending the request
+
+        res.on('end',function()
+        {
+          callback(data);
+
+           // console.error('No more data in response.');
+        });
+
+      });
+
+      req.on('error',function(e)
+      {
+        callback(`problem with request: ${e.message}`);
+      });
+
+      // write data to request body
+
+      req.write(JSON.stringify(postData));
+
+      req.end();
+
+    }
+
+    if(params.protocol == 'https')
+    {
+
+      if(typeof(params.message) != 'undefined')
+      {
+        postData = params.message;
+      }
+
+      var req = https.request(params.options,function(res)
+      {
+        // on data event is fired call back is append into data variable
+
+        res.on('data', function(chunk)
+        {
+           data += chunk;
+        });
+
+        // after ending the request
+        res.on('end',function()
+        {
+          callback(data);
+           // console.error('No more data in response.');
+        });
+
+      });
+
+      req.on('error',function(e)
+      {
+        callback(`problem with request: ${e.message}`);
+      });
+
+      // write data to request body
+
+      req.write(JSON.stringify(postData));
+
+      req.end();
+
+    }
+  }
+  else
+  {
+    return new Promise((resolve,reject)=>{
+
+      var postData = '';
+
+      var data = '';
+
+      if(params.protocol == 'http')
+      {
+
+        if(typeof(params.message) != 'undefined')
+        {
+          postData = params.message;
+        }
+
+        var req = http.request(params.options,function(res)
+        {
+
+          // on data event is fired call back is append into data variable
+
+          res.on('data', function(chunk)
+          {
+             data += chunk;
+
+          });
+
+          // after ending the request
+
+          res.on('end',function()
+          {
+            resolve(data);
+
+             // console.error('No more data in response.');
+          });
+
+        });
+
+        req.on('error',function(e)
+        {
+          reject(`problem with request: ${e.message}`);
+        });
+
+        // write data to request body
+
+        req.write(JSON.stringify(postData));
+
+        req.end();
+
+      }
+
+      if(params.protocol == 'https')
+      {
+
+        if(typeof(params.message) != 'undefined')
+        {
+          postData = params.message;
+        }
+
+        var req = https.request(params.options,function(res)
+        {
+          // on data event is fired call back is append into data variable
+
+          res.on('data', function(chunk)
+          {
+             data += chunk;
+          });
+
+          // after ending the request
+          res.on('end',function()
+          {
+            resolve(data);
+             // console.error('No more data in response.');
+          });
+
+        });
+
+        req.on('error',function(e)
+        {
+          reject(`problem with request: ${e.message}`);
+        });
+
+        // write data to request body
+
+        req.write(JSON.stringify(postData));
+
+        req.end();
+
+      }
+    }); 
+  }
+  
+}
+
+/*
+  create unique session id
+*/
+function makeid()
+{
+  var text = "";
+  var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"+(new Date).getTime();
+
+  for (var i = 0; i < 30; i++)
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+
+  return text;
+}
+
+/*
+  compression library
+*/
+
+var compress = {
+  gzip:function(data,callback)
+  {
+    zlib.gzip(data, function (_, result)
+    { 
+      if(callback != undefined && typeof(callback) == "function")
+      {
+        callback(result);
+      }
+      else
+      { 
+        return new Promise((resolve,reject)=>{
+          resolve(result);
+        });
+      }           
+    });
+  },
+  deflate:function(data,callback)
+  {
+    zlib.deflate(data, function (_, result)
+    { 
+      if(callback != undefined && typeof(callback) == "function")
+      {
+        callback(result);
+      }
+      else
+      { 
+        return new Promise((resolve,reject)=>{
+          resolve(result);
+        });
+      }               
+    });
+  },
+  DeflateRaw:function(data,callback)
+  {
+    zlib.deflateRaw(data, function (_, result)
+    { 
+      if(callback != undefined && typeof(callback) == "function")
+      {
+        callback(result);
+      }
+      else
+      { 
+        return new Promise((resolve,reject)=>{
+          resolve(result);
+        });
+      }              
+    });
+  }
+}; 
+
 session.clearSession();
 
 process.on('uncaughtException', error => {
-  console.warn(`Uncaught exception: ${error.toString()}`)
-  closeConnection("Exception")
-})
+  if(config.Misc.Exception === true)
+  {
+    console.warn(`Uncaught exception: ${error.toString()}`);
+    closeConnection("Exception")
+  }
+});
+
 process.on('SIGINT', signal => {
   console.warn(`Received ${signal} signal.`)
   closeConnection("CtrlC")
@@ -2171,3 +3003,33 @@ exports.init = haste;
 exports.renderPage = renderPage;
 
 exports.executeModules = executeModules;
+
+exports.defaultHeaders = defaultHeaders;
+
+exports.fileCopy = fileCopy;
+
+exports.fileReader = fileReader;
+
+exports.formatDate = formatDate;
+
+exports.Hash = Hash;
+
+exports.RemoteRequest = RemoteRequest;
+
+exports.writeLogs = writeLogs;
+
+exports.Authorization = Authorization;
+
+exports.checkAuth = checkAuth;
+
+exports.sendAuthorization = sendAuthorization;
+
+exports.getCookies = getCookies;
+
+exports.setCookies = setCookies;
+
+exports.getUserAgent = getUserAgent;
+
+exports.session = session;
+
+exports.compress = compress;
