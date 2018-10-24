@@ -60,6 +60,17 @@ const zlib = require('zlib');
 
 */
 
+function die(obj = null)
+{
+  if(obj === null)
+  {
+    throw new GlobalException("");
+  }
+  else
+  {
+    throw new GlobalException(obj);
+  }
+}
 
 var haste = function(params)
 {
@@ -143,6 +154,12 @@ var Library = function(params)
   this.socket = null;
 
   this.AllowModules = {};
+
+  this.GlobalCortexMiddlewares = [];
+
+  this.CortexMiddlewares = [];
+
+  this.rootPath = null;
 
   var date = new Date();
 
@@ -260,31 +277,7 @@ haste.fn = Library.prototype =
 
         hasteObj.server = http2.createSecureServer(options,handleRequest);
 
-        // hasteObj.server.on('error', (err) => console.error(err));
-
-        // hasteObj.server.on('stream',function(stream, headers,flags)
-        // {
-        //   var data = [];
-
-        //   stream.on('data',function(chunk)
-        //   {
-        //     data.push(chunk);
-        //   });
-
-        //   stream.on('end',function()
-        //   {
-        //     var body = Buffer.concat(data);
-            
-        //     handleHttp2Request(stream,headers,body);
-
-        //   });
-
-        //   stream.on('close',function()
-        //   {
-        //     stream.close();
-        //   });
-
-        // });
+        hasteObj.server.on('error', (err) => console.error(err));
 
         hasteObj.server.listen(port,ip);
 
@@ -481,7 +474,26 @@ haste.fn = Library.prototype =
   {
     defaultMethod = callback;
   },
-  dependencies:{},
+  route:function(rootPath,fileName)
+  {
+    fs.exists(fileName, function (exist)
+    {
+      if(!exist)
+      {
+        res.statusCode = 404;
+        res.end(`File ${requestUri} not found!`);
+        return;
+      }
+
+      hasteObj.rootPath = rootPath;
+
+      const routerObject = require(fileName);
+
+      routerObject.router;
+
+    });
+
+  },
   get:function(uri,argument)
   {
     // get method for get routers
@@ -523,6 +535,40 @@ haste.fn = Library.prototype =
   delete:function(uri,argument)
   {
 
+  },
+  cortexMiddleware:function(middlewareList)
+  {
+    try
+    {
+      if(typeof(middlewareList) != 'object' && !Array.isArray(middlewareList))
+      {
+        console.error("Cortex middlewares must be array");
+        return;
+      }
+
+      hasteObj.CortexMiddlewares = middlewareList;
+    }
+    catch(e)
+    {
+      console.error(e);
+    }
+  },
+  createGlobalCortexMiddlewares:function(middlewares)
+  {
+    try
+    {
+      if(typeof(middlewares) != 'object' && !Array.isArray(middlewares))
+      {
+        console.error("Cortex global middleware must be array");
+        return;
+      }
+
+      hasteObj.GlobalCortexMiddlewares = middlewares;
+    }
+    catch(e)
+    {
+      console.error(e);
+    }
   },
   middlewares:function(middleware)
   {   
@@ -684,6 +730,45 @@ haste.fn = Library.prototype =
   }
 };
 
+let routes = {
+  get:function(path,callback)
+  {
+    haste.fn.get(hasteObj.rootPath+path,callback);
+
+    return this;
+  },
+  post:function(path,callback)
+  {
+    haste.fn.post(hasteObj.rootPath+path,callback);
+
+    return this;
+  },
+  put:function(path,callback)
+  {
+    haste.fn.put(hasteObj.rootPath+path,callback);
+
+    return this;
+  },
+  delete:function(path,callback)
+  {
+    haste.fn.delete(hasteObj.rootPath+path,callback);
+
+    return this;
+  },
+  middlewares:function(middleware)
+  {
+    haste.fn.middlewares(middleware);
+
+    return this;
+  },
+  where:function(regex)
+  {
+    haste.fn.where(regex);
+
+    return this;
+  }
+};
+
 function cloneObject(obj)
 {
   if (null == obj || "object" != typeof obj) return obj;
@@ -694,7 +779,7 @@ function cloneObject(obj)
   return copy;
 }
 
-function modules(req,res,obj)
+async function modules(req,res,obj)
 {
 
   try
@@ -717,7 +802,17 @@ function modules(req,res,obj)
 
         for(var j=0;j<middlewareLen;j++)
         {
-          processMiddlewares(req,res,obj,j,middlewareLen);   
+          var middlewareCallback = await processMiddlewares(req,res,obj,j);   
+
+          if(!middlewareCallback)
+          {
+            break;
+          }
+        }
+
+        if(parseInt(j) == middlewareLen)
+        {
+          executeMethod(req,res,obj);
         }
       }
       else if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'string')
@@ -739,12 +834,12 @@ function modules(req,res,obj)
             if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
             {
               res.setHeader('Content-Type','application/json');
-              res.end(JSON.stringify(middlewareCallbacks[1]));
+              res.end(JSON.stringify(cloneObject(middlewareCallbacks[1])));
               return false;
             }
             else
             {
-              hasteObj.input[hasteObj.globalObject[obj]["middleware"]] = middlewareCallbacks[1];
+              hasteObj.input[hasteObj.globalObject[obj]["middleware"]] = cloneObject(middlewareCallbacks[1]);
               executeMethod(req,res,obj);
             }
           }
@@ -771,54 +866,57 @@ function modules(req,res,obj)
   }   
 }
 
-function processMiddlewares(req,res,obj,j,middlewareLen)
+function processMiddlewares(req,res,obj,j)
 {
   try
   {
     // checking if the middleware file exists or not
 
-    fs.stat(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js',function(err,middlewarestat)
-    {
-      if(err)
+    return new Promise((resolve,reject)=>{
+      fs.stat(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js',function(err,middlewarestat)
       {
-        renderErrorFiles(req,res,404);
-        return;
-      }
-
-      // if the middleware is a file
-
-      if(middlewarestat != undefined && middlewarestat.isFile())
-      {
-        // then invoke the middleware main method
-
-        var middlewareFile = require(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
-
-        var middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
-
-        if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
+        if(err)
         {
-          // if middleware callback is false then request is stopped here
+          resolve(false);
+          renderErrorFiles(req,res,404);
+          return;
+        }
 
-          res.setHeader('Content-Type','application/json');
+        // if the middleware is a file
 
-          res.end(JSON.stringify(middlewareCallbacks[1]));
+        if(middlewarestat != undefined && middlewarestat.isFile())
+        {
+          // then invoke the middleware main method
 
+          var middlewareFile = require(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
+
+          var middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
+
+          if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
+          {
+            // if middleware callback is false then request is stopped here
+
+            res.setHeader('Content-Type','application/json');
+
+            res.end(JSON.stringify(cloneObject(middlewareCallbacks[1])));
+
+            resolve(false);
+          }
+          else
+          {
+            hasteObj.input[hasteObj.globalObject[obj]["middleware"][j]] = cloneObject(middlewareCallbacks[1]);
+
+            resolve(true);
+          }
         }
         else
         {
-          hasteObj.input[hasteObj.globalObject[obj]["middleware"][j]] = middlewareCallbacks[1];
+          console.error('Middlware must be a javascript file');
+
+          resolve(false);
         }
 
-        if((j + 1) == middlewareLen)
-        {
-          executeMethod(req,res,obj);
-        }
-      }
-      else
-      {
-        console.error('Middlware must be a javascript file');
-      }
-
+      });
     });
   }
   catch(e)
@@ -828,6 +926,8 @@ function processMiddlewares(req,res,obj,j,middlewareLen)
     console.error(e);
 
     renderErrorFiles(req,res,500);
+
+    resolve(false);
   }
 }
 
@@ -887,17 +987,37 @@ function executeMethod(req,res,obj)
 
 }
 
-function executeModules()
+function executeModules(modulesList)
 {
-	if(hasteObj.dependencies["multiparty"] != undefined)
-	{
-		this.AllowModules.multiparty = require("multiparty");
-	}
+  try
+  {
+    for(var index in modulesList)
+    {
+      if(modulesList[index] === "multiparty")
+      {
+        this.AllowModules.multiparty = require("multiparty");
+      }
 
-	if(config.compression != undefined && config.compression.gzip != undefined && config.compression.gzip == false)
-	{
-		this.AllowModules.zlib = require('zlib');
-	}
+      if(modulesList[index] === "socket.io")
+      {
+        this.AllowModules.socketIO = require("socket.io");
+      }
+
+      if(modulesList[index] === "redis")
+      {
+        this.AllowModules.socketIO = require("redis");
+      }
+
+      if(modulesList[index] === "node-quic")
+      {
+        this.AllowModules.nodeQuic = require("node-quic");
+      } 
+    }
+  }
+  catch(e)
+  {
+    console.error(e);
+  }
 }
 
 function getIpAddress(req,res)
@@ -1074,6 +1194,8 @@ function handleRequest(req,res)
 
   	let uriListLen = 0;
 
+    hasteObj.input = new Object();
+
     if(ext != undefined)
     {
       try
@@ -1247,7 +1369,7 @@ function handleRequest(req,res)
           Iterating through object in to match uri and parse request accordingly            
         */
 
-        myExp = new RegExp('^'+hasteObj.globalObject[obj]["regex"]+'$');
+        myExp = new RegExp('^'+hasteObj.globalObject[obj]["regex"]+'$','i');
 
         if(requestUri.match(myExp) && requestMethod == hasteObj.globalObject[obj]['request_type'])
         {
@@ -1334,7 +1456,7 @@ function parsePOST(req,res,obj)
       {
         var form = new hasteObj.AllowModules.multiparty.Form();
 
-        form.parse(req,function(err,fields,files)
+        form.parse(req,async function(err,fields,files)
         {
           if(err)
           {
@@ -1351,7 +1473,77 @@ function parsePOST(req,res,obj)
 
           if(obj == undefined)
           {
-            processRequest(req,res);
+            var middlewareLen = hasteObj.GlobalCortexMiddlewares.length;
+
+            if(middlewareLen == 0)
+            {
+              processRequest(req,res);
+              return;
+            }
+
+            for(var j in hasteObj.GlobalCortexMiddlewares)
+            {
+              var middlewareStat = await processGlobalMiddlewares(req,res,j);
+
+              if(!middlewareStat)
+              {
+                break;
+              }
+            }
+
+            if((parseInt(j) + 1) == middlewareLen)
+            {
+              if(hasteObj.CortexMiddlewares.length == 0)
+              {
+                processRequest(req,res);
+                return;
+              }
+
+              let mapping = hasteObj.input['requestData']['mapping'];
+              let cortex = hasteObj.input['requestData']['cortex'];
+
+              let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
+
+              let foundMiddleware = false;
+
+              for(var i in hasteObj.CortexMiddlewares)
+              {
+                if(cortex === hasteObj.CortexMiddlewares[i].cortex && mapping === hasteObj.CortexMiddlewares[i].mapping)
+                {
+                  foundMiddleware = true;
+                  break;
+                }
+              }
+
+              if(foundMiddleware)
+              {
+                let cortexMiddlewares = hasteObj.CortexMiddlewares[i].middlewares;
+
+                let cortexMiddlewaresListLen = cortexMiddlewares.length;
+
+                for(var j in cortexMiddlewares)
+                {
+                  var middlewareStat = await processCortexMiddlewares(req,res,cortexMiddlewares[j]);
+
+                  if(!middlewareStat)
+                  {
+                    break;
+                  }
+                }
+
+                if((parseInt(j) + 1) == cortexMiddlewaresListLen)
+                {
+                  processRequest(req,res,obj);
+                }
+              }
+              else
+              {
+                if((parseInt(i) + 1) === cortexMiddlewareLen)
+                {
+                  renderErrorFiles(req,res,404);
+                }
+              }
+            }
           }
           else
           {
@@ -1375,7 +1567,7 @@ function parsePOST(req,res,obj)
         body += data;
       });
 
-      req.on('end',function()
+      req.on('end',async function()
       {
         if(req.headers['content-type'] == 'application/json')
         {
@@ -1387,7 +1579,77 @@ function parsePOST(req,res,obj)
 
             if(obj == undefined)
             {
-              processRequest(req,res);
+              var middlewareLen = hasteObj.GlobalCortexMiddlewares.length;
+
+              if(middlewareLen == 0)
+              {
+                processRequest(req,res);
+                return;
+              }
+
+              for(var j in hasteObj.GlobalCortexMiddlewares)
+              {
+                var middlewareStat = await processGlobalMiddlewares(req,res,j);
+
+                if(!middlewareStat)
+                {
+                  break;
+                }
+              }
+
+              if((parseInt(j) + 1) == middlewareLen)
+              {
+                if(hasteObj.CortexMiddlewares.length == 0)
+                {
+                  processRequest(req,res);
+                  return;
+                }
+
+                let mapping = hasteObj.input['requestData']['mapping'];
+                let cortex = hasteObj.input['requestData']['cortex'];
+
+                let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
+
+                let foundMiddleware = false;
+
+                for(var i in hasteObj.CortexMiddlewares)
+                {
+                  if(cortex === hasteObj.CortexMiddlewares[i].cortex && mapping === hasteObj.CortexMiddlewares[i].mapping)
+                  {
+                    foundMiddleware = true;
+                    break;
+                  }
+                }
+
+                if(foundMiddleware)
+                {
+                  let cortexMiddlewares = hasteObj.CortexMiddlewares[i].middlewares;
+
+                  let cortexMiddlewaresListLen = cortexMiddlewares.length;
+
+                  for(var j in cortexMiddlewares)
+                  {
+                    var middlewareStat = await processCortexMiddlewares(req,res,cortexMiddlewares[j]);
+
+                    if(!middlewareStat)
+                    {
+                      break;
+                    }
+                  }
+
+                  if((parseInt(j) + 1) == cortexMiddlewaresListLen)
+                  {
+                    processRequest(req,res,obj);
+                  }
+                }
+                else
+                {
+                  if((parseInt(i) + 1) === cortexMiddlewareLen)
+                  {
+                    renderErrorFiles(req,res,404);
+                  }
+                }
+              }
             }
             else
             {
@@ -1406,7 +1668,77 @@ function parsePOST(req,res,obj)
 
           if(obj == undefined)
           {
-            processRequest(req,res);
+            var middlewareLen = hasteObj.GlobalCortexMiddlewares.length;
+
+            if(middlewareLen == 0)
+            {
+              processRequest(req,res);
+              return;
+            }
+
+            for(var j in hasteObj.GlobalCortexMiddlewares)
+            {
+              var middlewareStat = await processGlobalMiddlewares(req,res,j);
+
+              if(!middlewareStat)
+              {
+                break;
+              }
+            }
+
+            if((parseInt(j) + 1) == middlewareLen)
+            {
+              if(hasteObj.CortexMiddlewares.length == 0)
+              {
+                processRequest(req,res);
+                return;
+              }
+
+              let mapping = hasteObj.input['requestData']['mapping'];
+              let cortex = hasteObj.input['requestData']['cortex'];
+
+              let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
+
+              let foundMiddleware = false;
+
+              for(var i in hasteObj.CortexMiddlewares)
+              {
+                if(cortex === hasteObj.CortexMiddlewares[i].cortex && mapping === hasteObj.CortexMiddlewares[i].mapping)
+                {
+                  foundMiddleware = true;
+                  break;
+                }
+              }
+
+              if(foundMiddleware)
+              {
+                let cortexMiddlewares = hasteObj.CortexMiddlewares[i].middlewares;
+
+                let cortexMiddlewaresListLen = cortexMiddlewares.length;
+
+                for(var j in cortexMiddlewares)
+                {
+                  var middlewareStat = await processCortexMiddlewares(req,res,cortexMiddlewares[j]);
+
+                  if(!middlewareStat)
+                  {
+                    break;
+                  }
+                }
+
+                if((parseInt(j) + 1) == cortexMiddlewaresListLen)
+                {
+                  processRequest(req,res,obj);
+                }
+              }
+              else
+              {
+                if((parseInt(i) + 1) === cortexMiddlewareLen)
+                {
+                  renderErrorFiles(req,res,404);
+                }
+              }
+            }
           }
           else
           {
@@ -1424,6 +1756,138 @@ function parsePOST(req,res,obj)
   {
     res.end('No content-type header is present in the request');
     console.error('No content-type header is present in the request');
+  }
+}
+
+async function processCortexMiddlewares(req,res,middleware)
+{
+  try
+  {
+    // checking if the middleware file exists or not
+
+    return new Promise((resolve,reject)=>{
+      fs.stat(__rootdir+'/middlewares/'+middleware+'.js',function(err,middlewarestat)
+      {
+        if(err)
+        {
+          resolve(false);
+          renderErrorFiles(req,res,404);
+          return;
+        }
+
+        // if the middleware is a file
+
+        if(middlewarestat != undefined && middlewarestat.isFile())
+        {
+          // then invoke the middleware main method
+
+          var middlewareFile = require(__rootdir+'/middlewares/'+middleware+'.js');
+
+          var middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
+
+          if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
+          {
+            // if middleware callback is false then request is stopped here
+
+            res.setHeader('Content-Type','application/json');
+
+            res.end(JSON.stringify(cloneObject(middlewareCallbacks[1])));
+
+            resolve(false);
+            
+          }
+          else
+          {
+            hasteObj.input[middleware] = cloneObject(middlewareCallbacks[1]);
+
+            resolve(true);
+          }
+        }
+        else
+        {
+          resolve(false);
+
+          console.error('Middlware must be a javascript file');
+        }
+
+      });
+    }); 
+  }
+  catch(e)
+  {
+    // if file is not found of the middleware then 500 internal server error is thrown
+
+    resolve(false);
+
+    console.error(e);
+
+    renderErrorFiles(req,res,500);
+  }
+}
+
+async function processGlobalMiddlewares(req,res,j)
+{
+  try
+  {
+    // checking if the middleware file exists or not
+
+    return new Promise((resolve,reject)=>{
+      fs.stat(__rootdir+'/middlewares/'+hasteObj.GlobalCortexMiddlewares[j]+'.js',function(err,middlewarestat)
+      {
+        if(err)
+        {
+          resolve(false);
+          renderErrorFiles(req,res,404);
+          return;
+        }
+
+        // if the middleware is a file
+
+        if(middlewarestat != undefined && middlewarestat.isFile())
+        {
+          // then invoke the middleware main method
+
+          var middlewareFile = require(__rootdir+'/middlewares/'+hasteObj.GlobalCortexMiddlewares[j]+'.js');
+
+          var middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
+
+          if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
+          {
+            // if middleware callback is false then request is stopped here
+
+            res.setHeader('Content-Type','application/json');
+
+            res.end(JSON.stringify(cloneObject(middlewareCallbacks[1])));
+
+            resolve(false);
+            
+          }
+          else
+          {
+            hasteObj.input[hasteObj.GlobalCortexMiddlewares[j]] = cloneObject(middlewareCallbacks[1]);
+
+            resolve(true);
+          }
+        }
+        else
+        {
+          resolve(false);
+
+          console.error('Middlware must be a javascript file');
+        }
+
+      });
+    }); 
+  }
+  catch(e)
+  {
+    // if file is not found of the middleware then 500 internal server error is thrown
+
+    resolve(false);
+
+    console.error(e);
+
+    renderErrorFiles(req,res,500);
   }
 }
 
@@ -1461,10 +1925,9 @@ function processRequest(req,res)
   });
 }
 
-function GlobalException(message,stack)
+function GlobalException(object)
 {
-  this.message = message;
-  this.stack = stack;
+  this.globalObject = object;
 }
 
 function closeConnection(message)
@@ -3033,3 +3496,7 @@ exports.getUserAgent = getUserAgent;
 exports.session = session;
 
 exports.compress = compress;
+
+exports.routes = routes;
+
+global.die = die;
