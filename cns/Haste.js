@@ -4249,12 +4249,6 @@ async function http2RemoteRequest(params,callback)
       return;
     }
 
-    if(params.method == undefined || params.method == "")
-    {
-      console.error("Method cannot be empty");
-      return;
-    }
-
     if(params.options == undefined || params.options == "")
     {
       console.error("Options cannot be empty");
