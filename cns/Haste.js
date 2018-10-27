@@ -1,16 +1,16 @@
 /*
 
-  Haste Framework copy right 2017
+  Haste Framework copy right 2018
 
   By Pounze It Solution Pvt Ltd
 
   Developed @author Sudeep Dasgupta
 
-  email: sudeep.dasgupta@pounze.com or sudeep.ignition@gmail.com
+  email: sudeep@pounze.com or sudeep.ignition@gmail.com
 
   Join us to make this framework the best among all other frameworks
 
-  current version: 1.8
+  current version: 2.0
 
   next version will be in c++ Thread module will be implemented as node Addons library for concurrency
 
@@ -53,6 +53,10 @@ const mimeList = require('./MimeList.js');
 const CachedFiles = require('./CachedFiles.js');
 
 const zlib = require('zlib');
+
+const net = require('net');
+
+const fork = require('child_process').fork;
 
 /*
 
@@ -123,15 +127,15 @@ var haste = function(params)
 var Library = function(params)
 {
 
-  this.input = {};
-
   this.staticPath = [];
 
   this.globalGETObject = {};
   
   this.globalPOSTObject = {};
 
-  this.globalObject = {};
+  this.globalPUTObject = {};
+  
+  this.globalDELETEObject = {};
 
   this.cacheDocFile = {};
 
@@ -139,9 +143,7 @@ var Library = function(params)
 
   this.http2.constants = {};
 
-  this.req = {};
-
-  this.res = {};
+  this.filesList = [];
 
   this.cookieStatus = false;
 
@@ -275,9 +277,17 @@ haste.fn = Library.prototype =
           return;
         }
 
-        hasteObj.server = http2.createSecureServer(options,handleRequest);
+        hasteObj.server = http2.createSecureServer(options);
 
-        hasteObj.server.on('error', (err) => console.error(err));
+        hasteObj.server.on('request', function(req, res)
+        {
+          handleRequest(req,res);
+        });
+
+        hasteObj.server.on('error', function(err)
+        {
+          console.error(err)
+        });
 
         hasteObj.server.listen(port,ip);
 
@@ -494,6 +504,44 @@ haste.fn = Library.prototype =
     });
 
   },
+  pushFile:function(filesList)
+  {
+    if(this.requestType === "GET")
+    {
+      hasteObj.globalGETObject[this.path].filesList = filesList;
+    }
+    else if(this.requestType === "POST")
+    {
+      hasteObj.globalPOSTObject[this.path].filesList = filesList;
+    }
+    else if(this.requestType === "PUT")
+    {
+      hasteObj.globalPUTObject[this.path].filesList = filesList;
+    }
+    else
+    {
+      hasteObj.globalDELETEObject[this.path].filesList = filesList;
+    }
+  },
+  push:function(Msg)
+  {
+    if(this.requestType === "GET")
+    {
+      hasteObj.globalGETObject[this.path].Msg = Msg;
+    }
+    else if(this.requestType === "POST")
+    {
+      hasteObj.globalPOSTObject[this.path].Msg = Msg;
+    }
+    else if(this.requestType === "PUT")
+    {
+      hasteObj.globalPUTObject[this.path].Msg = Msg;
+    }
+    else
+    {
+      hasteObj.globalDELETEObject[this.path].Msg = Msg;
+    }
+  },
   get:function(uri,argument)
   {
     // get method for get routers
@@ -530,11 +578,37 @@ haste.fn = Library.prototype =
   },
   put:function(uri,argument)
   {
+    // put method for put routers
 
+    hasteObj.globalPUTObject[uri] = {
+      "uri":uri,
+      "request_type":"PUT",
+      "argument":argument,
+      "regex":uri
+    };
+
+    this.requestType = "PUT";
+
+    this.path = uri;
+
+    return this;
   },
   delete:function(uri,argument)
   {
+    // delete method for delete routers
 
+    hasteObj.globalDELETEObject[uri] = {
+      "uri":uri,
+      "request_type":"DELETE",
+      "argument":argument,
+      "regex":uri
+    };
+
+    this.requestType = "DELETE";
+
+    this.path = uri;
+
+    return this;
   },
   cortexMiddleware:function(middlewareList)
   {
@@ -582,6 +656,14 @@ haste.fn = Library.prototype =
     	{
     		hasteObj.globalPOSTObject[this.path].middleware = middleware;
     	}
+      else if(this.requestType == "PUT")
+      {
+        hasteObj.globalPUTObject[this.path].middleware = middleware;
+      }
+      else
+      {
+        hasteObj.globalDELETEObject[this.path].middleware = middleware;
+      }
     }
     catch(e)
     {
@@ -618,6 +700,28 @@ haste.fn = Library.prototype =
       	{
         	hasteObj.globalPOSTObject[this.path]['regex'] = hasteObj.globalPOSTObject[this.path]['regex'].replace(regex,hasteObj.globalPOSTObject[this.path]['regexExp'][regex]);
       	}
+      }
+      else if(this.requestType == "PUT")
+      {
+        hasteObj.globalPUTObject[this.path].regexExp = regex;
+
+        hasteObj.globalPUTObject[this.path]['regex'] = hasteObj.globalPUTObject[this.path]['uri'];
+
+        for(regex in hasteObj.globalPUTObject[this.path]['regexExp'])
+        {
+          hasteObj.globalPUTObject[this.path]['regex'] = hasteObj.globalPUTObject[this.path]['regex'].replace(regex,hasteObj.globalPUTObject[this.path]['regexExp'][regex]);
+        }
+      }
+      else
+      {
+        hasteObj.globalDELETEObject[this.path].regexExp = regex;
+
+        hasteObj.globalDELETEObject[this.path]['regex'] = hasteObj.globalDELETEObject[this.path]['uri'];
+
+        for(regex in hasteObj.globalDELETEObject[this.path]['regexExp'])
+        {
+          hasteObj.globalDELETEObject[this.path]['regex'] = hasteObj.globalDELETEObject[this.path]['regex'].replace(regex,hasteObj.globalDELETEObject[this.path]['regexExp'][regex]);
+        }
       }
 
     }
@@ -694,39 +798,6 @@ haste.fn = Library.prototype =
   {
     // allow folders to get accessed
     hasteObj.staticPath = path;
-  },
-  webSocket:function(input,callback)
-  {
-
-    // method for realtime application using websocket.io and sending data to controller
-
-    if(typeof(input["cortex"]) != 'undefined' && typeof(input["cortex"]) == 'string' && input["cortex"] != '')
-    {
-      fs.stat('./controllers/'+input["cortex"]+'.js',function(err,data)
-      {
-        if(err)
-        {
-        	callback(false);
-          console.error('controller does not exists');
-        }
-
-        var controller = require('../controllers/'+input["cortex"]+'.js');
-
-        var callbackData = controller.init(null,null,input);
-
-        callback(callbackData);
-
-      });
-
-    }   
-    else
-    {
-    	callback(false);
-      console.error('cortex field must be string');
-    }
-
-    return this;
-
   }
 };
 
@@ -794,11 +865,11 @@ async function modules(req,res,obj)
 
     */
 
-    if(typeof(hasteObj.globalObject[obj]["middleware"]) != 'undefined')
+    if(typeof(req.globalObject[obj]["middleware"]) != 'undefined')
     {
-      if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'object' && Array.isArray(hasteObj.globalObject[obj]["middleware"]))
+      if(typeof(req.globalObject[obj]["middleware"]) == 'object' && Array.isArray(req.globalObject[obj]["middleware"]))
       {
-        let middlewareLen = hasteObj.globalObject[obj]["middleware"].length;
+        let middlewareLen = req.globalObject[obj]["middleware"].length;
 
         for(var j=0;j<middlewareLen;j++)
         {
@@ -815,9 +886,9 @@ async function modules(req,res,obj)
           executeMethod(req,res,obj);
         }
       }
-      else if(typeof(hasteObj.globalObject[obj]["middleware"]) == 'string')
+      else if(typeof(req.globalObject[obj]["middleware"]) == 'string')
       {
-        fs.stat(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js',function(err,middlewarestat)
+        fs.stat(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"]+'.js',function(err,middlewarestat)
         {
           if(err)
           {
@@ -827,9 +898,9 @@ async function modules(req,res,obj)
 
           if(middlewarestat != undefined && middlewarestat.isFile())
           {
-            let middlewareFile = require(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"]+'.js');
+            let middlewareFile = require(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"]+'.js');
 
-            let middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
+            let middlewareCallbacks = middlewareFile.init(req,res,req.input);
 
             if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
             {
@@ -839,7 +910,7 @@ async function modules(req,res,obj)
             }
             else
             {
-              hasteObj.input[hasteObj.globalObject[obj]["middleware"]] = cloneObject(middlewareCallbacks[1]);
+              req.input[req.globalObject[obj]["middleware"]] = cloneObject(middlewareCallbacks[1]);
               executeMethod(req,res,obj);
             }
           }
@@ -873,7 +944,7 @@ function processMiddlewares(req,res,obj,j)
     // checking if the middleware file exists or not
 
     return new Promise((resolve,reject)=>{
-      fs.stat(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js',function(err,middlewarestat)
+      fs.stat(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"][j]+'.js',function(err,middlewarestat)
       {
         if(err)
         {
@@ -888,9 +959,9 @@ function processMiddlewares(req,res,obj,j)
         {
           // then invoke the middleware main method
 
-          var middlewareFile = require(__rootdir+'/middlewares/'+hasteObj.globalObject[obj]["middleware"][j]+'.js');
+          var middlewareFile = require(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"][j]+'.js');
 
-          var middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
+          var middlewareCallbacks = middlewareFile.init(req,res,req.input);
 
           if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
           {
@@ -904,7 +975,7 @@ function processMiddlewares(req,res,obj,j)
           }
           else
           {
-            hasteObj.input[hasteObj.globalObject[obj]["middleware"][j]] = cloneObject(middlewareCallbacks[1]);
+            req.input[req.globalObject[obj]["middleware"][j]] = cloneObject(middlewareCallbacks[1]);
 
             resolve(true);
           }
@@ -943,16 +1014,16 @@ function executeMethod(req,res,obj)
 
   */
 
-  if(typeof(hasteObj.globalObject[obj]["argument"]) == 'function')
+  if(typeof(req.globalObject[obj]["argument"]) == 'function')
   {
-    hasteObj.globalObject[obj]["argument"](req,res,hasteObj.input);
+    req.globalObject[obj]["argument"](req,res,req.input);
   }
-  else if(typeof(hasteObj.globalObject[obj]["argument"]) == 'string')
+  else if(typeof(req.globalObject[obj]["argument"]) == 'string')
   {
     try
     {
 
-     fs.stat(__rootdir+'/controllers/'+hasteObj.globalObject[obj]["argument"]+'.js',function(err,stat)
+     fs.stat(__rootdir+'/controllers/'+req.globalObject[obj]["argument"]+'.js',function(err,stat)
      {
         if(err)
         {
@@ -962,9 +1033,9 @@ function executeMethod(req,res,obj)
 
         if(stat.isFile())
         {
-          var controller = require(__rootdir+'/controllers/'+hasteObj.globalObject[obj]["argument"]+'.js');
+          var controller = require(__rootdir+'/controllers/'+req.globalObject[obj]["argument"]+'.js');
 
-          controller.init(req,res,hasteObj.input);
+          controller.init(req,res,req.input);
         }
         else
         {
@@ -1005,7 +1076,7 @@ function executeModules(modulesList)
 
       if(modulesList[index] === "redis")
       {
-        this.AllowModules.socketIO = require("redis");
+        this.AllowModules.redis = require("redis");
       }
 
       if(modulesList[index] === "node-quic")
@@ -1096,7 +1167,7 @@ function serveStaticFiles(req,res,requestUri,ext)
         }
       }
 
-      var fileName = PATHNAME.basename(requestUri);
+      var fileName = Buffer.from(requestUri, 'utf8').toString('hex');
 
       CachedFiles.staticFiles[fileName] = {};
 
@@ -1135,7 +1206,7 @@ function serveStaticFiles(req,res,requestUri,ext)
   
 }
 
-function handleRequest(req,res)
+async function handleRequest(req,res)
 {
 	try
 	{
@@ -1194,7 +1265,7 @@ function handleRequest(req,res)
 
   	let uriListLen = 0;
 
-    hasteObj.input = new Object();
+    req.input = new Object();
 
     if(ext != undefined)
     {
@@ -1228,7 +1299,7 @@ function handleRequest(req,res)
         }
         else
         {
-          var fileName = PATHNAME.basename(requestUri);
+          var fileName = Buffer.from(requestUri, 'utf8').toString('hex');
 
           if(config.cache.staticFiles)
           {
@@ -1325,13 +1396,25 @@ function handleRequest(req,res)
     {
     	uriListLen = Object.keys(hasteObj.globalGETObject).length;
 
-    	hasteObj.globalObject = hasteObj.globalGETObject;
+    	req.globalObject = hasteObj.globalGETObject;
     }
     else if(requestMethod == "POST")
     {
     	uriListLen = Object.keys(hasteObj.globalPOSTObject).length;
 
-    	hasteObj.globalObject = hasteObj.globalPOSTObject;
+    	req.globalObject = hasteObj.globalPOSTObject;
+    }
+    else if(requestMethod == "PUT")
+    {
+      uriListLen = Object.keys(hasteObj.globalPUTObject).length;
+
+      req.globalObject = hasteObj.globalPUTObject;
+    }
+    else if(requestMethod == "DELETE")
+    {
+      uriListLen = Object.keys(hasteObj.globalDELETEObject).length;
+
+      req.globalObject = hasteObj.globalDELETEObject;
     }
 
     /*
@@ -1363,25 +1446,28 @@ function handleRequest(req,res)
 
       */
 
-      for(obj in hasteObj.globalObject)
+      for(obj in req.globalObject)
       {
         /*
           Iterating through object in to match uri and parse request accordingly            
         */
 
-        myExp = new RegExp('^'+hasteObj.globalObject[obj]["regex"]+'$','i');
+        myExp = new RegExp('^'+req.globalObject[obj]["regex"]+'$','i');
 
-        if(requestUri.match(myExp) && requestMethod == hasteObj.globalObject[obj]['request_type'])
+        if(requestUri.match(myExp) && requestMethod == req.globalObject[obj]['request_type'])
         {
+
+          req.currentObject = req.globalObject[obj];
+
           let requestUriArr = requestUri.split('/');
 
-          let matchedArr = hasteObj.globalObject[obj]["uri"].split('/');
+          let matchedArr = req.globalObject[obj]["uri"].split('/');
 
           let matchedArrLen = matchedArr.length;
 
           for(let mat=1;mat<matchedArrLen;mat++)
           {
-            hasteObj.input[matchedArr[mat]] = requestUriArr[mat];
+            req.input[matchedArr[mat]] = requestUriArr[mat];
           }
 
           if(requestMethod == "GET")
@@ -1391,6 +1477,14 @@ function handleRequest(req,res)
           else if(requestMethod == "POST")
           {
             parsePOST(req,res,obj);
+          }
+          else if(requestMethod == "PUT")
+          {
+            parsePUT(req,res,obj);
+          }
+          else if(requestMethod == "DELETE")
+          {
+            parseDELETE(req,res,obj);
           }
           else
           {
@@ -1425,6 +1519,55 @@ function handleRequest(req,res)
 	}
 }
 
+function pushFilesStreams(req,res,fileName)
+{
+  return new Promise((resolve,reject)=>{
+
+    fs.exists(__rootdir+fileName,function(exists)
+    {
+      if(!exists)
+      {
+        renderErrorFiles(req,res,404);
+        resolve(false);
+        return;
+      }
+
+      res.stream.pushStream({ ':path': fileName }, (err, pushStreams, headers) => {
+
+        if(err)
+        {
+          console.error(err);
+          resolve(false);
+          return;
+        }
+
+        pushStreams.on("error",function(err)
+        {
+          resolve(false);
+        });
+
+        const fd = fs.openSync(__rootdir+fileName, 'r');
+
+        var data = fs.readFileSync(__rootdir+fileName);
+
+        const stat = fs.fstatSync(fd);
+
+        const headersObj = {
+          'content-length': stat.size,
+          'last-modified': stat.mtime.toUTCString(),
+          'content-type': mimeList[PATHNAME.extname(fileName)]
+        };
+
+        pushStreams.end(data);
+
+        resolve(true);
+
+      });
+      
+    });
+  })
+}
+
 function parseGET(req,res,obj)
 {
   // parse get request
@@ -1432,9 +1575,659 @@ function parseGET(req,res,obj)
   {
     var url_parsed = url_module.parse(req.url,true);
     
-    hasteObj.input['requestData'] = url_parsed['query'];
+    req.input['requestData'] = url_parsed['query'];
 
     modules(req,res,obj);
+
+  }
+  catch(e)
+  {
+    console.error(e);
+    console.error("Failed to parse get request");
+  }
+}
+
+function parsePUT(req,res,obj)
+{
+  // parse get request
+  try
+  {
+    if(typeof(req.headers['content-type']) != 'undefined')
+    {
+      // parse put request 
+
+      if(req.headers['content-type'].match(/(multipart\/form\-data\;)/g))
+      {
+        try
+        {
+          var form = new hasteObj.AllowModules.multiparty.Form();
+
+          form.parse(req,async function(err,fields,files)
+          {
+            if(err)
+            {
+              console.error(err);
+              return;
+            }
+
+            var bindkey = {
+              fields:fields,
+              files:files
+            };
+
+            req.input['requestData'] = bindkey;
+
+            if(obj == undefined)
+            {
+              var middlewareLen = hasteObj.GlobalCortexMiddlewares.length;
+
+              if(middlewareLen == 0)
+              {
+                processRequest(req,res);
+                return;
+              }
+
+              for(var j in hasteObj.GlobalCortexMiddlewares)
+              {
+                var middlewareStat = await processGlobalMiddlewares(req,res,j);
+
+                if(!middlewareStat)
+                {
+                  break;
+                }
+              }
+
+              if((parseInt(j) + 1) == middlewareLen)
+              {
+                if(hasteObj.CortexMiddlewares.length == 0)
+                {
+                  processRequest(req,res);
+                  return;
+                }
+
+                let mapping = req.input['requestData']['mapping'];
+                let cortex = req.input['requestData']['cortex'];
+
+                let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
+
+                let foundMiddleware = false;
+
+                for(var i in hasteObj.CortexMiddlewares)
+                {
+                  if(cortex === hasteObj.CortexMiddlewares[i].cortex && mapping === hasteObj.CortexMiddlewares[i].mapping)
+                  {
+                    foundMiddleware = true;
+                    break;
+                  }
+                }
+
+                if(foundMiddleware)
+                {
+                  let cortexMiddlewares = hasteObj.CortexMiddlewares[i].middlewares;
+
+                  let cortexMiddlewaresListLen = cortexMiddlewares.length;
+
+                  for(var j in cortexMiddlewares)
+                  {
+                    var middlewareStat = await processCortexMiddlewares(req,res,cortexMiddlewares[j]);
+
+                    if(!middlewareStat)
+                    {
+                      break;
+                    }
+                  }
+
+                  if((parseInt(j) + 1) == cortexMiddlewaresListLen)
+                  {
+                    processRequest(req,res,obj);
+                  }
+                }
+                else
+                {
+                  if((parseInt(i) + 1) === cortexMiddlewareLen)
+                  {
+                    renderErrorFiles(req,res,404);
+                  }
+                }
+              }
+            }
+            else
+            {
+              modules(req,res,obj);
+            }
+
+          });
+
+        }
+        catch(e)
+        {
+          console.error('Please install multiparty {npm install multiparty}');
+        }
+
+      }
+      else
+      {
+        var body = '';
+        req.on('data',function(data)
+        {
+          body += data;
+        });
+
+        req.on('end',async function()
+        {
+          if(req.headers['content-type'] == 'application/json')
+          {
+            try
+            {
+              var jsonData = JSON.parse(body);
+
+              req.input['requestData'] = jsonData;
+
+              if(obj == undefined)
+              {
+                var middlewareLen = hasteObj.GlobalCortexMiddlewares.length;
+
+                if(middlewareLen == 0)
+                {
+                  processRequest(req,res);
+                  return;
+                }
+
+                for(var j in hasteObj.GlobalCortexMiddlewares)
+                {
+                  var middlewareStat = await processGlobalMiddlewares(req,res,j);
+
+                  if(!middlewareStat)
+                  {
+                    break;
+                  }
+                }
+
+                if((parseInt(j) + 1) == middlewareLen)
+                {
+                  if(hasteObj.CortexMiddlewares.length == 0)
+                  {
+                    processRequest(req,res);
+                    return;
+                  }
+
+                  let mapping = req.input['requestData']['mapping'];
+                  let cortex = req.input['requestData']['cortex'];
+
+                  let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
+
+                  let foundMiddleware = false;
+
+                  for(var i in hasteObj.CortexMiddlewares)
+                  {
+                    if(cortex === hasteObj.CortexMiddlewares[i].cortex && mapping === hasteObj.CortexMiddlewares[i].mapping)
+                    {
+                      foundMiddleware = true;
+                      break;
+                    }
+                  }
+
+                  if(foundMiddleware)
+                  {
+                    let cortexMiddlewares = hasteObj.CortexMiddlewares[i].middlewares;
+
+                    let cortexMiddlewaresListLen = cortexMiddlewares.length;
+
+                    for(var j in cortexMiddlewares)
+                    {
+                      var middlewareStat = await processCortexMiddlewares(req,res,cortexMiddlewares[j]);
+
+                      if(!middlewareStat)
+                      {
+                        break;
+                      }
+                    }
+
+                    if((parseInt(j) + 1) == cortexMiddlewaresListLen)
+                    {
+                      processRequest(req,res,obj);
+                    }
+                  }
+                  else
+                  {
+                    if((parseInt(i) + 1) === cortexMiddlewareLen)
+                    {
+                      renderErrorFiles(req,res,404);
+                    }
+                  }
+                }
+              }
+              else
+              {
+                modules(req,res,obj);
+              }
+            }
+            catch(e)
+            {
+              console.error(e);
+              req.end(req.headers['content-type'] + " currently not supported");
+            }
+          }
+          else if(req.headers['content-type'] == "application/x-www-form-urlencoded")
+          {
+            req.input['requestData'] = qs.parse(body);
+
+            if(obj == undefined)
+            {
+              var middlewareLen = hasteObj.GlobalCortexMiddlewares.length;
+
+              if(middlewareLen == 0)
+              {
+                processRequest(req,res);
+                return;
+              }
+
+              for(var j in hasteObj.GlobalCortexMiddlewares)
+              {
+                var middlewareStat = await processGlobalMiddlewares(req,res,j);
+
+                if(!middlewareStat)
+                {
+                  break;
+                }
+              }
+
+              if((parseInt(j) + 1) == middlewareLen)
+              {
+                if(hasteObj.CortexMiddlewares.length == 0)
+                {
+                  processRequest(req,res);
+                  return;
+                }
+
+                let mapping = req.input['requestData']['mapping'];
+                let cortex = req.input['requestData']['cortex'];
+
+                let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
+
+                let foundMiddleware = false;
+
+                for(var i in hasteObj.CortexMiddlewares)
+                {
+                  if(cortex === hasteObj.CortexMiddlewares[i].cortex && mapping === hasteObj.CortexMiddlewares[i].mapping)
+                  {
+                    foundMiddleware = true;
+                    break;
+                  }
+                }
+
+                if(foundMiddleware)
+                {
+                  let cortexMiddlewares = hasteObj.CortexMiddlewares[i].middlewares;
+
+                  let cortexMiddlewaresListLen = cortexMiddlewares.length;
+
+                  for(var j in cortexMiddlewares)
+                  {
+                    var middlewareStat = await processCortexMiddlewares(req,res,cortexMiddlewares[j]);
+
+                    if(!middlewareStat)
+                    {
+                      break;
+                    }
+                  }
+
+                  if((parseInt(j) + 1) == cortexMiddlewaresListLen)
+                  {
+                    processRequest(req,res,obj);
+                  }
+                }
+                else
+                {
+                  if((parseInt(i) + 1) === cortexMiddlewareLen)
+                  {
+                    renderErrorFiles(req,res,404);
+                  }
+                }
+              }
+            }
+            else
+            {
+              modules(req,res,obj);
+            }
+          }
+          else
+          {
+            req.end(req.headers['content-type'] + " currently not supported");
+          }
+        });
+      }
+    }
+    else
+    {
+      res.end('No content-type header is present in the request');
+      console.error('No content-type header is present in the request');
+    }
+
+  }
+  catch(e)
+  {
+    console.error(e);
+    console.error("Failed to parse get request");
+  }
+}
+
+function parseDELETE(req,res,obj)
+{
+  // parse get request
+  try
+  {
+    if(typeof(req.headers['content-type']) != 'undefined')
+    {
+      // parse delete request 
+
+      if(req.headers['content-type'].match(/(multipart\/form\-data\;)/g))
+      {
+        try
+        {
+          var form = new hasteObj.AllowModules.multiparty.Form();
+
+          form.parse(req,async function(err,fields,files)
+          {
+            if(err)
+            {
+              console.error(err);
+              return;
+            }
+
+            var bindkey = {
+              fields:fields,
+              files:files
+            };
+
+            req.input['requestData'] = bindkey;
+
+            if(obj == undefined)
+            {
+              var middlewareLen = hasteObj.GlobalCortexMiddlewares.length;
+
+              if(middlewareLen == 0)
+              {
+                processRequest(req,res);
+                return;
+              }
+
+              for(var j in hasteObj.GlobalCortexMiddlewares)
+              {
+                var middlewareStat = await processGlobalMiddlewares(req,res,j);
+
+                if(!middlewareStat)
+                {
+                  break;
+                }
+              }
+
+              if((parseInt(j) + 1) == middlewareLen)
+              {
+                if(hasteObj.CortexMiddlewares.length == 0)
+                {
+                  processRequest(req,res);
+                  return;
+                }
+
+                let mapping = req.input['requestData']['mapping'];
+                let cortex = req.input['requestData']['cortex'];
+
+                let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
+
+                let foundMiddleware = false;
+
+                for(var i in hasteObj.CortexMiddlewares)
+                {
+                  if(cortex === hasteObj.CortexMiddlewares[i].cortex && mapping === hasteObj.CortexMiddlewares[i].mapping)
+                  {
+                    foundMiddleware = true;
+                    break;
+                  }
+                }
+
+                if(foundMiddleware)
+                {
+                  let cortexMiddlewares = hasteObj.CortexMiddlewares[i].middlewares;
+
+                  let cortexMiddlewaresListLen = cortexMiddlewares.length;
+
+                  for(var j in cortexMiddlewares)
+                  {
+                    var middlewareStat = await processCortexMiddlewares(req,res,cortexMiddlewares[j]);
+
+                    if(!middlewareStat)
+                    {
+                      break;
+                    }
+                  }
+
+                  if((parseInt(j) + 1) == cortexMiddlewaresListLen)
+                  {
+                    processRequest(req,res,obj);
+                  }
+                }
+                else
+                {
+                  if((parseInt(i) + 1) === cortexMiddlewareLen)
+                  {
+                    renderErrorFiles(req,res,404);
+                  }
+                }
+              }
+            }
+            else
+            {
+              modules(req,res,obj);
+            }
+
+          });
+
+        }
+        catch(e)
+        {
+          console.error('Please install multiparty {npm install multiparty}');
+        }
+
+      }
+      else
+      {
+        var body = '';
+        req.on('data',function(data)
+        {
+          body += data;
+        });
+
+        req.on('end',async function()
+        {
+          if(req.headers['content-type'] == 'application/json')
+          {
+            try
+            {
+              var jsonData = JSON.parse(body);
+
+              req.input['requestData'] = jsonData;
+
+              if(obj == undefined)
+              {
+                var middlewareLen = hasteObj.GlobalCortexMiddlewares.length;
+
+                if(middlewareLen == 0)
+                {
+                  processRequest(req,res);
+                  return;
+                }
+
+                for(var j in hasteObj.GlobalCortexMiddlewares)
+                {
+                  var middlewareStat = await processGlobalMiddlewares(req,res,j);
+
+                  if(!middlewareStat)
+                  {
+                    break;
+                  }
+                }
+
+                if((parseInt(j) + 1) == middlewareLen)
+                {
+                  if(hasteObj.CortexMiddlewares.length == 0)
+                  {
+                    processRequest(req,res);
+                    return;
+                  }
+
+                  let mapping = req.input['requestData']['mapping'];
+                  let cortex = req.input['requestData']['cortex'];
+
+                  let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
+
+                  let foundMiddleware = false;
+
+                  for(var i in hasteObj.CortexMiddlewares)
+                  {
+                    if(cortex === hasteObj.CortexMiddlewares[i].cortex && mapping === hasteObj.CortexMiddlewares[i].mapping)
+                    {
+                      foundMiddleware = true;
+                      break;
+                    }
+                  }
+
+                  if(foundMiddleware)
+                  {
+                    let cortexMiddlewares = hasteObj.CortexMiddlewares[i].middlewares;
+
+                    let cortexMiddlewaresListLen = cortexMiddlewares.length;
+
+                    for(var j in cortexMiddlewares)
+                    {
+                      var middlewareStat = await processCortexMiddlewares(req,res,cortexMiddlewares[j]);
+
+                      if(!middlewareStat)
+                      {
+                        break;
+                      }
+                    }
+
+                    if((parseInt(j) + 1) == cortexMiddlewaresListLen)
+                    {
+                      processRequest(req,res,obj);
+                    }
+                  }
+                  else
+                  {
+                    if((parseInt(i) + 1) === cortexMiddlewareLen)
+                    {
+                      renderErrorFiles(req,res,404);
+                    }
+                  }
+                }
+              }
+              else
+              {
+                modules(req,res,obj);
+              }
+            }
+            catch(e)
+            {
+              console.error(e);
+              req.end(req.headers['content-type'] + " currently not supported");
+            }
+          }
+          else if(req.headers['content-type'] == "application/x-www-form-urlencoded")
+          {
+            req.input['requestData'] = qs.parse(body);
+
+            if(obj == undefined)
+            {
+              var middlewareLen = hasteObj.GlobalCortexMiddlewares.length;
+
+              if(middlewareLen == 0)
+              {
+                processRequest(req,res);
+                return;
+              }
+
+              for(var j in hasteObj.GlobalCortexMiddlewares)
+              {
+                var middlewareStat = await processGlobalMiddlewares(req,res,j);
+
+                if(!middlewareStat)
+                {
+                  break;
+                }
+              }
+
+              if((parseInt(j) + 1) == middlewareLen)
+              {
+                if(hasteObj.CortexMiddlewares.length == 0)
+                {
+                  processRequest(req,res);
+                  return;
+                }
+
+                let mapping = req.input['requestData']['mapping'];
+                let cortex = req.input['requestData']['cortex'];
+
+                let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
+
+                let foundMiddleware = false;
+
+                for(var i in hasteObj.CortexMiddlewares)
+                {
+                  if(cortex === hasteObj.CortexMiddlewares[i].cortex && mapping === hasteObj.CortexMiddlewares[i].mapping)
+                  {
+                    foundMiddleware = true;
+                    break;
+                  }
+                }
+
+                if(foundMiddleware)
+                {
+                  let cortexMiddlewares = hasteObj.CortexMiddlewares[i].middlewares;
+
+                  let cortexMiddlewaresListLen = cortexMiddlewares.length;
+
+                  for(var j in cortexMiddlewares)
+                  {
+                    var middlewareStat = await processCortexMiddlewares(req,res,cortexMiddlewares[j]);
+
+                    if(!middlewareStat)
+                    {
+                      break;
+                    }
+                  }
+
+                  if((parseInt(j) + 1) == cortexMiddlewaresListLen)
+                  {
+                    processRequest(req,res,obj);
+                  }
+                }
+                else
+                {
+                  if((parseInt(i) + 1) === cortexMiddlewareLen)
+                  {
+                    renderErrorFiles(req,res,404);
+                  }
+                }
+              }
+            }
+            else
+            {
+              modules(req,res,obj);
+            }
+          }
+          else
+          {
+            req.end(req.headers['content-type'] + " currently not supported");
+          }
+        });
+      }
+    }
+    else
+    {
+      res.end('No content-type header is present in the request');
+      console.error('No content-type header is present in the request');
+    }
 
   }
   catch(e)
@@ -1450,7 +2243,7 @@ function parsePOST(req,res,obj)
   {
     // parse post request 
 
-    if((req.method == 'POST' &&  req.headers['content-type'].match(/(multipart\/form\-data\;)/g)))
+    if(req.headers['content-type'].match(/(multipart\/form\-data\;)/g))
     {
       try
       {
@@ -1469,7 +2262,7 @@ function parsePOST(req,res,obj)
             files:files
           };
 
-          hasteObj.input['requestData'] = bindkey;
+          req.input['requestData'] = bindkey;
 
           if(obj == undefined)
           {
@@ -1499,8 +2292,8 @@ function parsePOST(req,res,obj)
                 return;
               }
 
-              let mapping = hasteObj.input['requestData']['mapping'];
-              let cortex = hasteObj.input['requestData']['cortex'];
+              let mapping = req.input['requestData']['mapping'];
+              let cortex = req.input['requestData']['cortex'];
 
               let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
 
@@ -1575,7 +2368,7 @@ function parsePOST(req,res,obj)
           {
             var jsonData = JSON.parse(body);
 
-            hasteObj.input['requestData'] = jsonData;
+            req.input['requestData'] = jsonData;
 
             if(obj == undefined)
             {
@@ -1605,8 +2398,8 @@ function parsePOST(req,res,obj)
                   return;
                 }
 
-                let mapping = hasteObj.input['requestData']['mapping'];
-                let cortex = hasteObj.input['requestData']['cortex'];
+                let mapping = req.input['requestData']['mapping'];
+                let cortex = req.input['requestData']['cortex'];
 
                 let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
 
@@ -1664,7 +2457,7 @@ function parsePOST(req,res,obj)
         }
         else if(req.headers['content-type'] == "application/x-www-form-urlencoded")
         {
-          hasteObj.input['requestData'] = qs.parse(body);
+          req.input['requestData'] = qs.parse(body);
 
           if(obj == undefined)
           {
@@ -1694,8 +2487,8 @@ function parsePOST(req,res,obj)
                 return;
               }
 
-              let mapping = hasteObj.input['requestData']['mapping'];
-              let cortex = hasteObj.input['requestData']['cortex'];
+              let mapping = req.input['requestData']['mapping'];
+              let cortex = req.input['requestData']['cortex'];
 
               let cortexMiddlewareLen = hasteObj.CortexMiddlewares.length;
 
@@ -1783,7 +2576,7 @@ async function processCortexMiddlewares(req,res,middleware)
 
           var middlewareFile = require(__rootdir+'/middlewares/'+middleware+'.js');
 
-          var middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
+          var middlewareCallbacks = middlewareFile.init(req,res,req.input);
 
           if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
           {
@@ -1798,7 +2591,7 @@ async function processCortexMiddlewares(req,res,middleware)
           }
           else
           {
-            hasteObj.input[middleware] = cloneObject(middlewareCallbacks[1]);
+            req.input[middleware] = cloneObject(middlewareCallbacks[1]);
 
             resolve(true);
           }
@@ -1849,7 +2642,7 @@ async function processGlobalMiddlewares(req,res,j)
 
           var middlewareFile = require(__rootdir+'/middlewares/'+hasteObj.GlobalCortexMiddlewares[j]+'.js');
 
-          var middlewareCallbacks = middlewareFile.init(req,res,hasteObj.input);
+          var middlewareCallbacks = middlewareFile.init(req,res,req.input);
 
           if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
           {
@@ -1864,7 +2657,7 @@ async function processGlobalMiddlewares(req,res,j)
           }
           else
           {
-            hasteObj.input[hasteObj.GlobalCortexMiddlewares[j]] = cloneObject(middlewareCallbacks[1]);
+            req.input[hasteObj.GlobalCortexMiddlewares[j]] = cloneObject(middlewareCallbacks[1]);
 
             resolve(true);
           }
@@ -1893,8 +2686,8 @@ async function processGlobalMiddlewares(req,res,j)
 
 function processRequest(req,res)
 {
-  var mapping = hasteObj.input['requestData']['mapping'];
-  var cortex = hasteObj.input['requestData']['cortex'];
+  var mapping = req.input['requestData']['mapping'];
+  var cortex = req.input['requestData']['cortex'];
 
   var tempMapping = '';
 
@@ -1920,7 +2713,7 @@ function processRequest(req,res)
 
     var controller = require(__rootdir+'/controllers/'+tempMapping+'/'+cortex+'.js');
 
-    controller.init(req,res,hasteObj.input);
+    controller.init(req,res,req.input);
 
   });
 }
@@ -1953,7 +2746,7 @@ function closeConnection(message)
 
 
 
-function renderPage(req,res,Render,page,code = null,headers = null,compression = null)
+async function renderPage(req,res,Render,page,pushFile = false,code = null,headers = null,compression = null)
 {
   // zip compression
 
@@ -1970,65 +2763,30 @@ function renderPage(req,res,Render,page,code = null,headers = null,compression =
         Checks for file existence using synchronous file reader
       */
 
-      if(config.cache.Document)
+      if(req.currentObject.filesList.length > 0)
       {
-        if(CachedFiles.documentFiles[page] == undefined)
+        var count = 0;
+
+        for(var index in req.currentObject.filesList)
         {
-          serveDocumentFile(req,res,Render,page,code,headers,compression);
+          await pushFilesStreams(req,res,req.currentObject.filesList[index]);
+
+          count += 1;
         }
-        else
+
+        if(count === req.currentObject.filesList.length)
         {
-          var modifiedDate = new Date(CachedFiles.documentFiles[page].stat.mtimeMs).getTime();
-
-          if(headers == null)
+          setTimeout(function()
           {
-            if(!res.headersSent)
-            {
-              res.setHeader("Server","Node Server");
-              res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
-              res.setHeader('Content-Type','text/html');
-              res.setHeader('ETag',modifiedDate);
-            }
-
-            if(hasteObj.cookieStatus)
-            {
-              res.setHeader("Set-Cookie",hasteObj.cookieStatus);
-            }
-
-            if(hasteObj.maintainanceStat != config.server.maintainance)
-            {
-              hasteObj.maintainanceStat = config.server.maintainance;
-            }
-            else
-            {
-              if(typeof(req.headers['if-none-match']) != 'undefined')
-              {
-                if(req.headers['if-none-match'] == modifiedDate)
-                {
-                  res.statusCode = 304;
-                }
-              }
-            }
-          }
-
-          if(compression != null)
-          {
-            zlib.gzip(CachedFiles.documentFiles[page].data, function (_, result)
-            { 
-              res.write(result);
-              res.end();                          
-            });
-          }
-          else
-          {
-            res.end(CachedFiles.documentFiles[page].data);     
-          }
+            renderDocument(req,res,Render,page,pushFile,code,headers,compression);
+          },0);
         }
       }
       else
       {
-        serveDocumentFile(req,res,Render,page,code,headers,compression);
+        renderDocument(req,res,Render,page,pushFile,code,headers,compression);
       }
+    
     }
     catch(e)
     {
@@ -2041,8 +2799,86 @@ function renderPage(req,res,Render,page,code = null,headers = null,compression =
   }
 }
 
+function renderDocument(req,res,Render,page,pushFile,code,headers,compression)
+{
+  if(config.cache.Document)
+  {
+    if(CachedFiles.documentFiles[page] == undefined)
+    {
+      serveDocumentFile(req,res,Render,page,pushFile,code,headers,compression);
+    }
+    else
+    {
+      var modifiedDate = new Date(CachedFiles.documentFiles[page].stat.mtimeMs).getTime();
 
-function serveDocumentFile(req,res,Render,page,code,headers,compression)
+      if(headers == null)
+      {
+        if(!res.headersSent)
+        {
+          res.setHeader("Server","Node Server");
+          res.setHeader("Developed-By","Pounze It-Solution Pvt Limited");
+          res.setHeader('Content-Type','text/html');
+          res.setHeader('ETag',modifiedDate);
+        }
+
+        if(hasteObj.cookieStatus)
+        {
+          res.setHeader("Set-Cookie",hasteObj.cookieStatus);
+        }
+
+        if(hasteObj.maintainanceStat != config.server.maintainance)
+        {
+          hasteObj.maintainanceStat = config.server.maintainance;
+        }
+        else
+        {
+          if(typeof(req.headers['if-none-match']) != 'undefined')
+          {
+            if(req.headers['if-none-match'] == modifiedDate)
+            {
+              res.statusCode = 304;
+            }
+          }
+        }
+      }
+
+      if(compression != null)
+      {
+        zlib.gzip(CachedFiles.documentFiles[page].data, function (_, result)
+        {
+          if(pushFile !== false)
+          {
+            res.stream.end(result);
+          }
+          else
+          {
+            res.write(result);
+            res.end();  
+          }                     
+        });
+      }
+      else
+      {
+        if(pushFile !== false)
+        {
+          res.stream.end(CachedFiles.documentFiles[page].data);  
+        }
+        else
+        {
+          res.write(CachedFiles.documentFiles[page].data);
+          res.end();  
+        }   
+      }
+    }
+  }
+  else
+  {
+    serveDocumentFile(req,res,Render,page,pushFile,code,headers,compression);
+  }
+}
+
+
+function serveDocumentFile(req,res,Render,page,pushFile,code,headers,compression)
 {
   let pathname = PATHNAME.join(__rootdir, "/views/"+page+'.html');
 
@@ -2124,13 +2960,27 @@ function serveDocumentFile(req,res,Render,page,code,headers,compression)
       {
         zlib.gzip(data, function (_, result)
         { 
-          res.write(result);
-          res.end();                          
+          if(pushFile !== false)
+          {
+            res.stream.end(result);  
+          }
+          else
+          {
+            res.write(result);
+            res.end();  
+          }                        
         });
       }
       else
       {
-        res.end(data);     
+        if(pushFile !== false)
+        {
+          res.stream.end(data);  
+        }
+        else
+        {
+          res.end(data);  
+        } 
       }
     });
 
@@ -3066,18 +3916,198 @@ async function fileReader(path,callback)
   }
 }
 
+// IPC 
 
+let ipc = {
+  fork:function(fileName)
+  {
+    ipc.ipcObject = fork(fileName);
+  },
+  onMessage:function(callback)
+  {
+    ipc.ipcObject.on('message', function(response)
+    {
+      if(typeof(callback) === "function")
+      {
+        callback(response);
+      }
+      else
+      {
+        return new Promise((resolve,reject)=>{
+          resolve(response);
+        });
+      }
+    });
+  },
+  send:function(obj)
+  {
+    ipc.ipcObject.send(obj);
+  },
+  parentSend:function(input)
+  {
+    process.send(input);
+  },
+  parentOnMessage:function(callback)
+  {
+    process.on('message', function(response)
+    {
+      if(typeof(callback) === "function")
+      {
+        callback(response);
+      }
+      else
+      {
+        return new Promise((resolve,reject)=>{
+          resolve(response);
+        });
+      }
+    });
+  }
+};
+
+// task distributor
+
+let taskDistributor = {
+  distribute:async function(data,splitCount,method,callback)
+  {
+    var splitData = [];
+
+    var joinData = [];
+
+    for(var i = 0;i<splitCount;i++)
+    {
+      splitData[i] = [];
+    }
+
+    for(var index in data)
+    {
+      splitData[index % splitCount].push(data[index]);
+    }
+
+    for(var i = 0;i<splitCount;i++)
+    {
+      var finalData = await method(splitData[i]).catch(function(e)
+      {
+        console.log(e);
+      });
+
+      joinData.push(finalData);
+    }
+
+    if(typeof(callback) === "function")
+    {
+      callback(joinData);
+    }
+    else
+    {
+      return new Promise((resolve,reject)=>{
+        resolve(joinData);
+      });
+    }
+  }
+};
+
+// 
+
+let worker = {
+  workers:[],
+  run:function(data,workerCount,method,callback)
+  {
+    try
+    {
+      var splitData = [];
+
+      var joinData = [];
+
+      // Fork workers
+      for (let i=0;i<workerCount;i++)
+      {
+        splitData[i] = [];
+      }
+
+      for(var index in data)
+      {
+        splitData[index % workerCount].push(data[index]);
+      }
+
+      worker.startWorker(data,workerCount,method,splitData,joinData,callback)
+    }
+    catch(e)
+    {
+      console.error(e);
+    }
+  },
+  startWorker:function(data,workerCount,method,splitData,joinData,callback)
+  {
+    try
+    {
+      if(cluster.isMaster)
+      {
+        worker.masterProcess(data,workerCount,splitData,joinData,callback);
+      }
+      else
+      {
+        method(splitData[cluster.worker.id - 1]);
+      }
+    }
+    catch(e)
+    {
+      console.log(e);
+    }
+  },
+  masterProcess:function(data,workerCount,splitData,joinData,callback)
+  {
+    try
+    {
+      for (let i=0;i<workerCount;i++)
+      {
+        const clusterWorker = cluster.fork();
+        worker.workers.push(clusterWorker);
+      }
+
+      var joinClusterData = [];
+
+      for(var index in worker.workers)
+      {
+        worker.workers[index].on('message', function(message)
+        {
+          joinClusterData.push(message);
+
+          if(joinClusterData.length === workerCount)
+          {
+            if(typeof(callback) === "function")
+            {
+              callback(joinClusterData);
+            }
+            else
+            {
+              return new Promise((resolve,reject)=>{
+                resolve(joinClusterData);
+              }); 
+            }
+          } 
+        });
+      }
+    }
+    catch(e)
+    {
+      console.error(e);
+    }
+  },
+  send:function(callbackData)
+  {
+    process.send(callbackData);
+  }
+};
 
 // formatting dates
 
-
-
-function formatDate(date)
+function formatDate(date,format,delimiter)
 {
 
   try
   {
-    month = '' + (date.getMonth() + 1),
+    let month = '' + (date.getMonth() + 1),
 
     day = '' + date.getDate(),
 
@@ -3100,9 +4130,35 @@ function formatDate(date)
 
     if (sec.length < 2) sec = '0' + sec;
 
+    if(format == "DDMMYYYY")
+    {
+      var dateArray = [day,month,year];
+    }
+    else if(format == "MMDDYYYY")
+    {
+      var dateArray = [month,day,year];
+    }
+    else if(format == "YYYYMMDD")
+    {
+      var dateArray = [year,month,day];
+    }
+    else
+    {
+      var dateArray = [year,day,month];
+    } 
 
-
-    return [year, month, day].join('-')+' '+hour+':'+min+':'+sec;
+    if(delimiter !== undefined && delimiter === "/")
+    {
+      return dateArray.join('/')+' '+hour+':'+min+':'+sec;
+    }
+    else if(delimiter !== undefined && delimiter === "-")
+    {
+      return dateArray.join('-')+' '+hour+':'+min+':'+sec;
+    }
+    else
+    {
+      return dateArray.join('/')+' '+hour+':'+min+':'+sec;
+    }
   }
   catch(e)
   {
@@ -3181,21 +4237,79 @@ function Hash(method,string,encoding)
   }
 }
 
+// http remote Request client
+
+async function http2RemoteRequest(params,callback)
+{
+  try
+  {
+    if(params.url == undefined || params.url == "")
+    {
+      console.error("Url cannot be empty");
+      return;
+    }
+
+    if(params.method == undefined || params.method == "")
+    {
+      console.error("Method cannot be empty");
+      return;
+    }
+
+    if(params.options == undefined || params.options == "")
+    {
+      console.error("Options cannot be empty");
+      return;
+    }
+
+    const clientSession = http2.connect(params.url);
+
+    const req = clientSession.request(params.options);
+
+    var responseHeaders = {};
+
+    var data = [];
+
+    req.on('response', (resHeaders) => {
+      responseHeaders = resHeaders;
+    });
+
+    req.on('data', (chunk) => {
+      data.push(chunk);
+    });
+
+    req.on('end', () => {
+      data = Buffer.concat(data);
+
+      clientSession.destroy();
+
+      if(typeof(callback) == "function")
+      {
+        callback(data);
+      }
+      else
+      {
+        return new Promise((resolve,reject)=>{
+          resolve(data);
+        }); 
+      }
+    });
+  }
+  catch(e)
+  {
+    console.error(e);
+  }
+}
 
 
 // method to make http client request to other server
 
-
-
 async function RemoteRequest(params,callback)
 {
-  if(callback != undefined && typeof(callback) == "function")
+  try
   {
-
-
     var postData = '';
 
-    var data = '';
+    var data = [];
 
     if(params.protocol == 'http')
     {
@@ -3212,15 +4326,25 @@ async function RemoteRequest(params,callback)
 
         res.on('data', function(chunk)
         {
-           data += chunk;
-
+          data.push(chunk);
         });
 
         // after ending the request
 
         res.on('end',function()
         {
-          callback(data);
+          data = Buffer.concat(data);
+          
+          if(typeof(callback) == "function")
+          {
+            callback(data);
+          }
+          else
+          {
+            return new Promise((resolve,reject)=>{
+              resolve(data);
+            }); 
+          }
 
            // console.error('No more data in response.');
         });
@@ -3254,13 +4378,22 @@ async function RemoteRequest(params,callback)
 
         res.on('data', function(chunk)
         {
-           data += chunk;
+          data += chunk;
         });
 
         // after ending the request
         res.on('end',function()
         {
-          callback(data);
+          if(typeof(callback) == "function")
+          {
+            callback(data);
+          }
+          else
+          {
+            return new Promise((resolve,reject)=>{
+              resolve(data);
+            }); 
+          }
            // console.error('No more data in response.');
         });
 
@@ -3279,98 +4412,10 @@ async function RemoteRequest(params,callback)
 
     }
   }
-  else
+  catch(e)
   {
-    return new Promise((resolve,reject)=>{
-
-      var postData = '';
-
-      var data = '';
-
-      if(params.protocol == 'http')
-      {
-
-        if(typeof(params.message) != 'undefined')
-        {
-          postData = params.message;
-        }
-
-        var req = http.request(params.options,function(res)
-        {
-
-          // on data event is fired call back is append into data variable
-
-          res.on('data', function(chunk)
-          {
-             data += chunk;
-
-          });
-
-          // after ending the request
-
-          res.on('end',function()
-          {
-            resolve(data);
-
-             // console.error('No more data in response.');
-          });
-
-        });
-
-        req.on('error',function(e)
-        {
-          reject(`problem with request: ${e.message}`);
-        });
-
-        // write data to request body
-
-        req.write(JSON.stringify(postData));
-
-        req.end();
-
-      }
-
-      if(params.protocol == 'https')
-      {
-
-        if(typeof(params.message) != 'undefined')
-        {
-          postData = params.message;
-        }
-
-        var req = https.request(params.options,function(res)
-        {
-          // on data event is fired call back is append into data variable
-
-          res.on('data', function(chunk)
-          {
-             data += chunk;
-          });
-
-          // after ending the request
-          res.on('end',function()
-          {
-            resolve(data);
-             // console.error('No more data in response.');
-          });
-
-        });
-
-        req.on('error',function(e)
-        {
-          reject(`problem with request: ${e.message}`);
-        });
-
-        // write data to request body
-
-        req.write(JSON.stringify(postData));
-
-        req.end();
-
-      }
-    }); 
+    console.error(e);
   }
-  
 }
 
 /*
@@ -3442,6 +4487,47 @@ var compress = {
   }
 }; 
 
+let RedisPS = {
+  config:{},
+  pub:{
+    createClient:function()
+    {
+      Redis.publisher = hasteObj.redis.createClient(Redis.config.url); 
+    },
+    onMessage:function(callback)
+    {
+      Redis.publisher.on('message', function(chan, msg)
+      {  
+        if(typeof(callback) === "function")
+        {
+          callback(chan, msg);
+        } 
+        else
+        {
+          return new Promise((resolve,reject)=>{
+            resolve(chan, msg);
+          });
+        }
+      });
+    },
+    subscribe:function(topicName)
+    {
+      Redis.publisher.subscribe(topicName);
+    }
+  },
+  sub:
+  {
+    createClient:function()
+    {
+      Redis.subscriber = hasteObj.redis.createClient(Redis.config.url);
+    },
+    publish:function(topic,msg)
+    {
+      Redis.subscriber.publish(topic, msg);  
+    }
+  }
+};
+
 session.clearSession();
 
 process.on('uncaughtException', error => {
@@ -3479,6 +4565,8 @@ exports.Hash = Hash;
 
 exports.RemoteRequest = RemoteRequest;
 
+exports.http2RemoteRequest = http2RemoteRequest;
+
 exports.writeLogs = writeLogs;
 
 exports.Authorization = Authorization;
@@ -3498,5 +4586,11 @@ exports.session = session;
 exports.compress = compress;
 
 exports.routes = routes;
+
+exports.RedisPS = RedisPS;
+
+exports.task = taskDistributor;
+
+exports.worker = worker;
 
 global.die = die;
