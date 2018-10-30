@@ -798,6 +798,23 @@ haste.fn = Library.prototype =
   {
     // allow folders to get accessed
     hasteObj.staticPath = path;
+  },
+  requiredModules:function(modulesList)
+  {
+    try
+    {
+      for(var index in modulesList)
+      {
+        if(global[modulesList[index]] == undefined)
+        {
+          global[modulesList[index]] = require(modulesList[index]);
+        }
+      }
+    }
+    catch(e)
+    {
+      console.error(e);
+    }
   }
 };
 
