@@ -1,97 +1,89 @@
-const haste = require('./cns/Haste.js');
+global.__rootdir = __dirname;
 
-var app = haste.__init__();
+const haste = require('./cns/HasteNew.js');
 
-app.HttpServer('127.0.0.1',8100,function(server)
+const path = require('path');
+
+const fs = require('fs');
+
+var app = haste.init();
+
+app.requiredModules([
+	'mongodb',
+	'redis',
+	'soap'
+]);
+
+const option = {
+  key: fs.readFileSync(__dirname + '/server.key'),
+  cert: fs.readFileSync(__dirname + '/server.crt')
+};
+
+var server = app.Http2Server('127.0.0.1',3000,option,function(server)
 {
-	haste.writeLogs('./file.log','Hello Sudeep',function(callback)
-	{
-		console.log(callback);
-	});
-
-	// var io = require('socket.io').listen(server);
-	// io.on('connection', function(socket)
-	// {
-	// 	socket.on('message', function(data)
-	// 	{
-	// 		app.webSocket(data,function(data)
-	// 		{
-	// 			socket.emit("callback",{status:true,msg:data});
-	// 		});
-	// 	});
-
-	// 	socket.on('disconnect',function(msg)
-	//     {
-	//     	console.log("disconnected");
-	//     });
-
-	//     socket.on('end',function()
-	//     {
-	//     	console.log('Server closed');
-	//     });
-	// });
+	console.log("Server started in port 3000");
 });
 
 app.DefaultMethod(function(req,res)
 {
-	res.setHeader("Name","Sudeep Dasgupta");
+	
 });
 
-app.AllowDirectories(['UserView/']);
+app.createGlobalCortexMiddlewares(["CortexMiddleware1","CortexMiddleware2"]);
 
-app.get('/$id/student/$name',function(req,res,input)
-{
-	if(!haste.checkAuth(req))
+app.cortexMiddleware([
 	{
-		let msg = "Please enter username and password";
-		haste.sendAuthorization(msg,res);
+		cortex:"TestHttp2Controllers",
+		mapping:"samples",
+		middlewares:["CortexSingleMiddleware"]
 	}
-	else
-	{
+]);
 
-		var call = haste.Authorization(req);
+app.route("/sudeep",__dirname+"/routes/Auth.js");
 
-		if(call[0] == 'root' && call[1] == 'kai') 
-		{
-			console.log(haste.getUserAgent(req));
-			let object = {
-				name:'Sudeep',
-				Expires:'Thu, 31 Aug 2017 00:00:00 GMT',
-				HttpOnly:true,
-				Path:'/'
-			};
 
-			console.log(haste.setCookies(object,res));
+// app.post("/",function(stream,headers)
+// {
+// 	stream.end("http2 working fine");
+// }).middlewares(["TestHttp2Middlware"]);
 
-			let parameters = {
-				query:"SELECT * FROM hotels WHERE hotel_id = ?",
-				match:[2]
-			};
-
-			haste.mySQL.query(parameters,function(err,data)
-			{
-				console.log(JSON.stringify(data));
-				app.views('test',req,res,'I am awesome');
-			});
-		}
-		else
-		{
-			res.end('Username and password is incorrect');
-		}
-	}
-
-}).middlewares(['TestMiddlware']).where({'$name':'[a-z]+','$id':'[0-9]{2}'});
-
-app.post('/done',function(req,res,input)
+app.get("/",function(req,res,input)
 {
-	console.log(input);
-});
+	app.views('http2',req,res,input);
+})
+.pushFile(
+[
+	"/bower_components/bootstrap/dist/css/bootstrap.min.css",
+	"/bower_components/font-awesome/css/font-awesome.min.css",
+	"/bower_components/Ionicons/css/ionicons.min.css",
+	"/dist/css/AdminLTE.min.css",
+	"/bower_components/jquery/dist/jquery.min.js",
+	"/bower_components/bootstrap/dist/js/bootstrap.min.js",
+	"/UserView/js/angular.min.js"
+]);
 
-app.get('/',function(req,res,input)
+app.put("/$id",function(req,res,input)
 {
-	res.end('I am the best');
-});
+	res.end(JSON.stringify(input));
+}).where({'$id':'[0-9]{2}'});
 
-app.get('/testinterna','InternalServerTest');
+app.delete("/$id",function(req,res,input)
+{
+	res.end(JSON.stringify(input));
+}).where({'$id':'[0-9]{2}'});
 
-app.close();
+app.post("/","TestHttp2Controllers").middlewares(["TestHttp2Middlware"]);
+
+app.get("/$id/sudeep/$name",function(req,res,input)
+{
+   try
+   {
+   	die({name:"sudeep"});
+   }
+   catch(e)
+   {
+   	console.log(e);
+   	app.views('http2',req,res,input);
+   }
+}).where({'$id':'[0-9]{2}','$name':'[a-zA-Z]+'});
+
