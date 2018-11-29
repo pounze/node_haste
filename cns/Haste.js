@@ -905,7 +905,7 @@ async function modules(req,res,obj)
       }
       else if(typeof(req.globalObject[obj]["middleware"]) == 'string')
       {
-        fs.stat(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"]+'.js',function(err,middlewarestat)
+        fs.stat(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"]+'.js',async function(err,middlewarestat)
         {
           if(err)
           {
@@ -917,7 +917,10 @@ async function modules(req,res,obj)
           {
             let middlewareFile = require(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"]+'.js');
 
-            let middlewareCallbacks = middlewareFile.init(req,res,req.input);
+            let middlewareCallbacks = await middlewareFile.init(req,res,req.input).catch(function(err)
+            {
+              console.error(err);
+            })
 
             if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
             {
@@ -961,7 +964,8 @@ function processMiddlewares(req,res,obj,j)
     // checking if the middleware file exists or not
 
     return new Promise((resolve,reject)=>{
-      fs.stat(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"][j]+'.js',function(err,middlewarestat)
+
+      fs.stat(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"][j]+'.js',async function(err,middlewarestat)
       {
         if(err)
         {
@@ -978,7 +982,10 @@ function processMiddlewares(req,res,obj,j)
 
           var middlewareFile = require(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"][j]+'.js');
 
-          var middlewareCallbacks = middlewareFile.init(req,res,req.input);
+          var middlewareCallbacks = await middlewareFile.init(req,res,req.input).catch(function(err)
+          {
+            console.error(err);
+          });
 
           if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
           {
@@ -2576,7 +2583,7 @@ async function processCortexMiddlewares(req,res,middleware)
     // checking if the middleware file exists or not
 
     return new Promise((resolve,reject)=>{
-      fs.stat(__rootdir+'/middlewares/'+middleware+'.js',function(err,middlewarestat)
+      fs.stat(__rootdir+'/middlewares/'+middleware+'.js',async function(err,middlewarestat)
       {
         if(err)
         {
@@ -2593,7 +2600,10 @@ async function processCortexMiddlewares(req,res,middleware)
 
           var middlewareFile = require(__rootdir+'/middlewares/'+middleware+'.js');
 
-          var middlewareCallbacks = middlewareFile.init(req,res,req.input);
+          var middlewareCallbacks = await middlewareFile.init(req,res,req.input).catch(function(err)
+          {
+            console.error(err);
+          });
 
           if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
           {
@@ -2642,7 +2652,7 @@ async function processGlobalMiddlewares(req,res,j)
     // checking if the middleware file exists or not
 
     return new Promise((resolve,reject)=>{
-      fs.stat(__rootdir+'/middlewares/'+hasteObj.GlobalCortexMiddlewares[j]+'.js',function(err,middlewarestat)
+      fs.stat(__rootdir+'/middlewares/'+hasteObj.GlobalCortexMiddlewares[j]+'.js',async function(err,middlewarestat)
       {
         if(err)
         {
@@ -2659,7 +2669,10 @@ async function processGlobalMiddlewares(req,res,j)
 
           var middlewareFile = require(__rootdir+'/middlewares/'+hasteObj.GlobalCortexMiddlewares[j]+'.js');
 
-          var middlewareCallbacks = middlewareFile.init(req,res,req.input);
+          var middlewareCallbacks = await middlewareFile.init(req,res,req.input).catch(function(err)
+          {
+            console.error(err);
+          });
 
           if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
           {
@@ -2711,6 +2724,7 @@ function processRequest(req,res)
   if(cortex == undefined || cortex == "" || cortex == null)
   {
     console.error("No cortex method found");
+    res.end(JSON.stringify({status:false,msg:"No cortex found"}));
     return;
   }
 
@@ -2725,6 +2739,7 @@ function processRequest(req,res)
     if(err)
     {
       console.error('Controller must me a javascript file'); 
+      res.end(JSON.stringify({status:false,msg:"No cortex found"}));
       return;
     }
 
