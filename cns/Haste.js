@@ -294,6 +294,7 @@ haste.fn = Library.prototype =
         callback(hasteObj.server);
       }
 
+
       return hasteObj.server;
     }
     catch(e)
@@ -905,7 +906,7 @@ async function modules(req,res,obj)
       }
       else if(typeof(req.globalObject[obj]["middleware"]) == 'string')
       {
-        fs.stat(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"]+'.js',async function(err,middlewarestat)
+        fs.stat(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"]+'.js',function(err,middlewarestat)
         {
           if(err)
           {
@@ -917,7 +918,7 @@ async function modules(req,res,obj)
           {
             let middlewareFile = require(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"]+'.js');
 
-            let middlewareCallbacks = await middlewareFile.init(req,res,req.input);
+            let middlewareCallbacks = middlewareFile.init(req,res,req.input);
 
             if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
             {
@@ -961,8 +962,7 @@ function processMiddlewares(req,res,obj,j)
     // checking if the middleware file exists or not
 
     return new Promise((resolve,reject)=>{
-
-      fs.stat(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"][j]+'.js',async function(err,middlewarestat)
+      fs.stat(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"][j]+'.js',function(err,middlewarestat)
       {
         if(err)
         {
@@ -979,7 +979,7 @@ function processMiddlewares(req,res,obj,j)
 
           var middlewareFile = require(__rootdir+'/middlewares/'+req.globalObject[obj]["middleware"][j]+'.js');
 
-          var middlewareCallbacks = await middlewareFile.init(req,res,req.input);
+          var middlewareCallbacks = middlewareFile.init(req,res,req.input);
 
           if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
           {
@@ -1645,22 +1645,14 @@ function parsePUT(req,res,obj)
                 return;
               }
 
-              var globalMiddlewareStatus = true;
-
               for(var j in hasteObj.GlobalCortexMiddlewares)
               {
                 var middlewareStat = await processGlobalMiddlewares(req,res,j);
 
                 if(!middlewareStat)
                 {
-                  globalMiddlewareStatus = false;
                   break;
                 }
-              }
-
-              if(globalMiddlewareStatus === false)
-              {
-                return;
               }
 
               if((parseInt(j) + 1) == middlewareLen)
@@ -1759,22 +1751,14 @@ function parsePUT(req,res,obj)
                   return;
                 }
 
-                var globalMiddlewareStatus = true;
-
                 for(var j in hasteObj.GlobalCortexMiddlewares)
                 {
                   var middlewareStat = await processGlobalMiddlewares(req,res,j);
 
                   if(!middlewareStat)
                   {
-                    globalMiddlewareStatus = false;
                     break;
                   }
-                }
-
-                if(globalMiddlewareStatus === false)
-                {
-                  return;
                 }
 
                 if((parseInt(j) + 1) == middlewareLen)
@@ -1856,22 +1840,14 @@ function parsePUT(req,res,obj)
                 return;
               }
 
-              var globalMiddlewareStatus = true;
-
               for(var j in hasteObj.GlobalCortexMiddlewares)
               {
                 var middlewareStat = await processGlobalMiddlewares(req,res,j);
 
                 if(!middlewareStat)
                 {
-                  globalMiddlewareStatus = false;
                   break;
                 }
-              }
-
-              if(globalMiddlewareStatus === false)
-              {
-                return;
               }
 
               if((parseInt(j) + 1) == middlewareLen)
@@ -1994,22 +1970,14 @@ function parseDELETE(req,res,obj)
                 return;
               }
 
-              var globalMiddlewareStatus = true;
-
               for(var j in hasteObj.GlobalCortexMiddlewares)
               {
                 var middlewareStat = await processGlobalMiddlewares(req,res,j);
 
                 if(!middlewareStat)
                 {
-                  globalMiddlewareStatus = false;
                   break;
                 }
-              }
-
-              if(globalMiddlewareStatus === false)
-              {
-                return;
               }
 
               if((parseInt(j) + 1) == middlewareLen)
@@ -2108,22 +2076,14 @@ function parseDELETE(req,res,obj)
                   return;
                 }
 
-                var globalMiddlewareStatus = true;
-
                 for(var j in hasteObj.GlobalCortexMiddlewares)
                 {
                   var middlewareStat = await processGlobalMiddlewares(req,res,j);
 
                   if(!middlewareStat)
                   {
-                    globalMiddlewareStatus = false;
                     break;
                   }
-                }
-
-                if(globalMiddlewareStatus === false)
-                {
-                  return;
                 }
 
                 if((parseInt(j) + 1) == middlewareLen)
@@ -2205,22 +2165,14 @@ function parseDELETE(req,res,obj)
                 return;
               }
 
-              var globalMiddlewareStatus = true;
-
               for(var j in hasteObj.GlobalCortexMiddlewares)
               {
                 var middlewareStat = await processGlobalMiddlewares(req,res,j);
 
                 if(!middlewareStat)
                 {
-                  globalMiddlewareStatus = false;
                   break;
                 }
-              }
-
-              if(globalMiddlewareStatus === false)
-              {
-                return;
               }
 
               if((parseInt(j) + 1) == middlewareLen)
@@ -2340,22 +2292,14 @@ function parsePOST(req,res,obj)
               return;
             }
 
-            var globalMiddlewareStatus = true;
-
             for(var j in hasteObj.GlobalCortexMiddlewares)
             {
               var middlewareStat = await processGlobalMiddlewares(req,res,j);
 
               if(!middlewareStat)
               {
-                globalMiddlewareStatus = false;
                 break;
               }
-            }
-
-            if(globalMiddlewareStatus === false)
-            {
-              return;
             }
 
             if((parseInt(j) + 1) == middlewareLen)
@@ -2454,22 +2398,14 @@ function parsePOST(req,res,obj)
                 return;
               }
 
-              var globalMiddlewareStatus = true;
-
               for(var j in hasteObj.GlobalCortexMiddlewares)
               {
                 var middlewareStat = await processGlobalMiddlewares(req,res,j);
 
                 if(!middlewareStat)
                 {
-                  globalMiddlewareStatus = false;
                   break;
                 }
-              }
-
-              if(globalMiddlewareStatus === false)
-              {
-                return;
               }
 
               if((parseInt(j) + 1) == middlewareLen)
@@ -2551,22 +2487,14 @@ function parsePOST(req,res,obj)
               return;
             }
 
-            var globalMiddlewareStatus = true;
-
             for(var j in hasteObj.GlobalCortexMiddlewares)
             {
               var middlewareStat = await processGlobalMiddlewares(req,res,j);
 
               if(!middlewareStat)
               {
-                globalMiddlewareStatus = false;
                 break;
               }
-            }
-
-            if(globalMiddlewareStatus === false)
-            {
-              return;
             }
 
             if((parseInt(j) + 1) == middlewareLen)
@@ -2649,7 +2577,7 @@ async function processCortexMiddlewares(req,res,middleware)
     // checking if the middleware file exists or not
 
     return new Promise((resolve,reject)=>{
-      fs.stat(__rootdir+'/middlewares/'+middleware+'.js',async function(err,middlewarestat)
+      fs.stat(__rootdir+'/middlewares/'+middleware+'.js',function(err,middlewarestat)
       {
         if(err)
         {
@@ -2666,7 +2594,7 @@ async function processCortexMiddlewares(req,res,middleware)
 
           var middlewareFile = require(__rootdir+'/middlewares/'+middleware+'.js');
 
-          var middlewareCallbacks = await middlewareFile.init(req,res,req.input);
+          var middlewareCallbacks = middlewareFile.init(req,res,req.input);
 
           if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
           {
@@ -2715,7 +2643,7 @@ async function processGlobalMiddlewares(req,res,j)
     // checking if the middleware file exists or not
 
     return new Promise((resolve,reject)=>{
-      fs.stat(__rootdir+'/middlewares/'+hasteObj.GlobalCortexMiddlewares[j]+'.js',async function(err,middlewarestat)
+      fs.stat(__rootdir+'/middlewares/'+hasteObj.GlobalCortexMiddlewares[j]+'.js',function(err,middlewarestat)
       {
         if(err)
         {
@@ -2732,7 +2660,7 @@ async function processGlobalMiddlewares(req,res,j)
 
           var middlewareFile = require(__rootdir+'/middlewares/'+hasteObj.GlobalCortexMiddlewares[j]+'.js');
 
-          var middlewareCallbacks = await middlewareFile.init(req,res,req.input);
+          var middlewareCallbacks = middlewareFile.init(req,res,req.input);
 
           if(middlewareCallbacks != undefined && middlewareCallbacks[0] != undefined && !middlewareCallbacks[0])
           {
@@ -2784,7 +2712,6 @@ function processRequest(req,res)
   if(cortex == undefined || cortex == "" || cortex == null)
   {
     console.error("No cortex method found");
-    res.end(JSON.stringify({status:false,msg:"No cortex found"}));
     return;
   }
 
@@ -2799,7 +2726,6 @@ function processRequest(req,res)
     if(err)
     {
       console.error('Controller must me a javascript file'); 
-      res.end(JSON.stringify({status:false,msg:"No cortex found"}));
       return;
     }
 
@@ -2940,7 +2866,15 @@ function renderDocument(req,res,Render,page,pushFile,code,headers,compression)
         {
           if(pushFile !== false)
           {
-            res.stream.end(result);
+            if(res.stream == undefined)
+            {
+              res.write(result);
+              res.end();  
+            }
+            else
+            {
+              res.stream.end(result);
+            }
           }
           else
           {
@@ -2953,7 +2887,15 @@ function renderDocument(req,res,Render,page,pushFile,code,headers,compression)
       {
         if(pushFile !== false)
         {
-          res.stream.end(CachedFiles.documentFiles[page].data);  
+          if(res.stream == undefined)
+          {
+            res.write(CachedFiles.documentFiles[page].data);
+            res.end();  
+          }
+          else
+          {
+            res.stream.end(CachedFiles.documentFiles[page].data); 
+          }
         }
         else
         {
@@ -3054,7 +2996,15 @@ function serveDocumentFile(req,res,Render,page,pushFile,code,headers,compression
         { 
           if(pushFile !== false)
           {
-            res.stream.end(result);  
+            if(res.stream == undefined)
+            {
+              res.write(result);
+              res.end();  
+            }
+            else
+            {
+              res.stream.end(result);  
+            }
           }
           else
           {
@@ -3067,7 +3017,15 @@ function serveDocumentFile(req,res,Render,page,pushFile,code,headers,compression
       {
         if(pushFile !== false)
         {
-          res.stream.end(data);  
+          if(res.stream == undefined)
+          {
+            res.write(result);
+            res.end();  
+          }
+          else
+          {
+            res.stream.end(result);  
+          }
         }
         else
         {
@@ -4616,22 +4574,6 @@ let RedisPS = {
 
 session.clearSession();
 
-process.on('uncaughtException', error => {
-  if(config.Misc.Exception === true)
-  {
-    console.warn(`Uncaught exception: ${error.toString()}`);
-    closeConnection("Exception")
-  }
-});
-
-process.on('SIGINT', signal => {
-  console.warn(`Received ${signal} signal.`)
-  closeConnection("CtrlC")
-})
-process.on('exit', code => {
-  console.warn(`About to exit with code ${code}.`)
-  closeConnection("exit")
-})
 
 exports.init = haste;
 
