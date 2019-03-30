@@ -2855,7 +2855,7 @@ async function renderPage(req,res,Render,page,pushFile = false,code = null,heade
         Checks for file existence using synchronous file reader
       */
 
-      if(req.currentObject.filesList.length > 0)
+      if(req.currentObject.filesList !== undefined && req.currentObject.filesList.length > 0)
       {
         var count = 0;
 
